@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>JSON Studio - Viewer & Formatter</title>
+  <title>JSON Tree Viewer & Formatter</title>
   <style>
     :root {
       --bg: #0b0f19;
@@ -23,6 +24,15 @@
       --error-bg: rgba(239, 68, 68, 0.1);
       --error-border: rgba(239, 68, 68, 0.3);
       --error-text: #f87171;
+      --hl-bg: #fef08a;
+      --hl-text: #0f172a;
+      --hl-active-bg: #facc15;
+      --hl-active-ring: #eab308;
+      --error-bg: rgba(239, 68, 68, 0.1);
+      --error-border: rgba(239, 68, 68, 0.3);
+      --error-text: #f87171;
+      
+      /* Tree Highlight Colors */
       --hl-bg: #fef08a;
       --hl-text: #0f172a;
       --hl-active-bg: #facc15;
@@ -97,6 +107,9 @@
       gap: 14px;
       height: 100%;
       transition: grid-template-columns 0.25s ease;
+      gap: 16px;
+      height: calc(100vh - 32px);
+      transition: grid-template-columns 0.25s ease;
     }
     .app-container.single-pane { grid-template-columns: 1fr; }
 
@@ -116,9 +129,12 @@
       justify-content: space-between;
       padding: 8px 12px;
       background: var(--panel-header);
+      padding: 8px 14px;
+      background: #151d30;
       border-bottom: 1px solid var(--border);
       font-size: 13px;
       font-weight: 600;
+      gap: 8px;
       gap: 8px;
     }
 
@@ -127,12 +143,15 @@
       align-items: center;
       gap: 6px;
       flex-wrap: wrap;
+      gap: 6px;
+      flex-wrap: wrap;
     }
 
     button {
       background: #1f2937;
       color: var(--text);
       border: 1px solid #374151;
+      padding: 4px 9px;
       padding: 4px 9px;
       border-radius: 5px;
       font-size: 12px;
@@ -144,10 +163,74 @@
       justify-content: center;
       gap: 4px;
       user-select: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
     }
     button:hover { background: #374151; }
     button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
     button.primary:hover { background: var(--accent-hover); }
+
+    /* Independent Search Bars */
+    .search-box {
+      display: flex;
+      align-items: center;
+      background: #0d1321;
+      border: 1px solid #374151;
+      border-radius: 5px;
+      padding: 2px 5px;
+      gap: 3px;
+    }
+    .search-box:focus-within {
+      border-color: var(--accent);
+    }
+    .search-input {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 12px;
+      outline: none;
+      width: 110px;
+      padding: 2px 4px;
+    }
+    .search-count {
+      font-size: 11px;
+      color: var(--text-muted);
+      min-width: 30px;
+      text-align: center;
+      user-select: none;
+      font-family: ui-monospace, monospace;
+    }
+    .search-nav-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 2px 3px;
+      font-size: 9px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .search-nav-btn:hover {
+      background: #1f2937;
+      color: var(--text);
+    }
+
+    /* Close Button for Tree View */
+    button.close-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      font-size: 14px;
+      padding: 3px 6px;
+      border-radius: 4px;
+      line-height: 1;
+    }
+    button.close-btn:hover {
+      color: #f87171;
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.3);
+    }
 
     /* Search Toolbar */
     .search-box {
@@ -195,12 +278,17 @@
       gap: 6px;
       margin-left: 2px;
       padding-left: 6px;
+      gap: 6px;
+      margin-left: 2px;
+      padding-left: 6px;
       border-left: 1px solid var(--border);
     }
     .switch-label { font-size: 12px; color: var(--text-muted); user-select: none; }
     .switch {
       position: relative;
       display: inline-block;
+      width: 34px;
+      height: 18px;
       width: 34px;
       height: 18px;
     }
@@ -211,6 +299,7 @@
       top: 0; left: 0; right: 0; bottom: 0;
       background-color: #374151;
       transition: .25s;
+      transition: .25s;
       border-radius: 20px;
     }
     .slider:before {
@@ -218,15 +307,20 @@
       content: "";
       height: 12px;
       width: 12px;
+      height: 12px;
+      width: 12px;
       left: 3px;
       bottom: 3px;
       background-color: white;
+      transition: .25s;
       transition: .25s;
       border-radius: 50%;
     }
     input:checked + .slider { background-color: var(--accent); }
     input:checked + .slider:before { transform: translateX(16px); }
+    input:checked + .slider:before { transform: translateX(16px); }
 
+    /* Editor Layout with Precise Metric Alignment */
     /* Editor Layout */
     .editor-wrapper {
       flex: 1;
@@ -236,6 +330,8 @@
       background: #0d1117;
     }
     .line-numbers {
+      width: 50px;
+      padding: 14px 6px 14px 0;
       width: 48px;
       padding: 14px 6px 14px 0;
       text-align: right;
@@ -248,7 +344,31 @@
       border-right: 1px solid var(--border);
       overflow: hidden;
       z-index: 3;
+      z-index: 3;
     }
+    .line-numbers div {
+      height: 19.5px;
+      padding-right: 6px;
+      transition: all 0.15s;
+    }
+
+    .line-numbers div.error-line {
+      background: #ef4444;
+      color: #ffffff;
+      font-weight: 700;
+      border-radius: 3px 0 0 3px;
+      position: relative;
+    }
+    .line-numbers div.error-line::after {
+      content: "▶";
+      position: absolute;
+      right: -3px;
+      top: 0;
+      font-size: 9px;
+      color: #ef4444;
+    }
+
+    .textarea-container {
     .line-numbers div { height: 19.5px; padding-right: 6px; }
     .line-numbers div.error-line {
       background: #ef4444;
@@ -271,10 +391,39 @@
       overflow: hidden;
     }
 
+    #raw-backdrop, textarea {
+      position: relative;
+      overflow: hidden;
+    }
+
     .backdrop-layer, textarea {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 13px;
       line-height: 1.5;
+      padding: 14px;
+      margin: 0;
+      border: 0;
+      box-sizing: border-box;
+      white-space: pre;
+      letter-spacing: 0;
+      tab-size: 2;
+    }
+
+    #raw-backdrop {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      overflow: hidden;
+      pointer-events: none;
+      color: transparent;
+      z-index: 1;
+      background: transparent;
+    }
+
+    textarea {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: transparent;
+      color: var(--text);
       padding: 14px;
       margin: 0;
       border: 0;
@@ -303,6 +452,43 @@
       outline: none;
       overflow-wrap: normal;
       overflow-x: auto;
+      z-index: 2;
+    }
+
+    /* Diagnostics Section */
+    .editor-footer {
+      background: #151d30;
+      border-top: 1px solid var(--border);
+      padding: 8px 16px;
+      font-size: 12px;
+      max-height: 170px;
+      overflow-y: auto;
+    }
+    .editor-footer.has-error {
+      background: var(--error-bg);
+      border-color: var(--error-border);
+    }
+    .error-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(239, 68, 68, 0.15);
+    }
+    .error-item:last-child { border-bottom: none; }
+    .error-title-row { display: flex; align-items: center; gap: 8px; }
+    .error-tag {
+      background: #ef4444;
+      color: #fff;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .error-line-badge { color: #fca5a5; font-weight: 600; font-size: 12px; }
+    .error-msg { color: var(--text); font-size: 12px; margin-left: 2px; }
+    .error-hint { color: #fca5a5; font-size: 11px; margin-left: 2px; }
       z-index: 2;
     }
 
@@ -342,6 +528,7 @@
 
     /* Tree View Output */
     #tree-pane { display: none; }
+    #tree-pane { display: none; }
     #viewer-output {
       flex: 1;
       padding: 16px;
@@ -351,6 +538,8 @@
       line-height: 1.5;
     }
 
+    .tree-item { margin-left: 18px; position: relative; }
+    .tree-row { display: flex; align-items: center; gap: 4px; padding: 2px 0; }
     .tree-item { margin-left: 18px; position: relative; }
     .tree-row { display: flex; align-items: center; gap: 4px; padding: 2px 0; }
     .caret-btn {
@@ -366,6 +555,10 @@
       border-radius: 3px;
     }
     .caret-btn:hover { color: #fff; background: #2d3748; }
+
+    .collapsed > .tree-row > .caret-btn { transform: rotate(-90deg); }
+    .collapsed > .tree-children { display: none; }
+    .collapsed > .tree-row .badge-summary { display: inline-block; }
     .collapsed > .tree-row > .caret-btn { transform: rotate(-90deg); }
     .collapsed > .tree-children { display: none; }
     .collapsed > .tree-row .badge-summary { display: inline-block; }
@@ -389,6 +582,30 @@
     .null { color: var(--null-color); font-weight: bold; }
     .comma { color: #94a3b8; }
 
+    /* Fix: Raw Backdrop Highlights (Transparent Text to Avoid Overlap) */
+    #raw-backdrop mark.highlight {
+      background-color: rgba(250, 204, 21, 0.3);
+      color: transparent !important;
+      border-radius: 2px;
+      box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.4);
+    }
+    #raw-backdrop mark.highlight.active-match {
+      background-color: rgba(250, 204, 21, 0.65);
+      box-shadow: 0 0 0 1px #eab308, 0 0 6px rgba(250, 204, 21, 0.8);
+    }
+
+    /* Tree View Highlights */
+    #viewer-output mark.highlight {
+      background-color: var(--hl-bg);
+      color: var(--hl-text);
+      padding: 1px 3px;
+      border-radius: 2px;
+      font-weight: 600;
+    }
+    #viewer-output mark.highlight.active-match {
+      background-color: var(--hl-active-bg);
+      outline: 2px solid var(--hl-active-ring);
+      box-shadow: 0 0 6px rgba(250, 204, 21, 0.7);
     .backdrop-layer mark.highlight {
       background-color: rgba(250, 204, 21, 0.3);
       color: transparent !important;
@@ -414,6 +631,84 @@
 </head>
 <body>
 
+<div class="app-container single-pane" id="app-container">
+  <!-- Raw JSON Pane -->
+  <div class="pane">
+    <div class="header">
+      <span>Raw JSON</span>
+      <div class="actions">
+        <!-- 1. Raw Editor Search Bar -->
+        <div class="search-box">
+          <input type="text" id="raw-search-input" class="search-input" placeholder="Search text..." />
+          <span id="raw-search-count" class="search-count">0/0</span>
+          <button id="raw-search-prev" class="search-nav-btn" title="Previous match (Shift+Enter)">▲</button>
+          <button id="raw-search-next" class="search-nav-btn" title="Next match (Enter)">▼</button>
+        </div>
+
+        <button id="btn-format" class="primary">Format</button>
+        <button id="btn-minify">Minify</button>
+        <button id="btn-clear">Clear</button>
+        
+        <div class="switch-container">
+          <label class="switch">
+            <input type="checkbox" id="tree-toggle" />
+            <span class="slider"></span>
+          </label>
+          <span class="switch-label">Tree View</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="editor-wrapper">
+      <div class="line-numbers" id="line-numbers"></div>
+      <div class="textarea-container">
+        <div id="raw-backdrop"></div>
+        <textarea id="json-input" spellcheck="false" placeholder="Paste or type JSON here...">
+{
+  "application": "JSON Viewer Suite",
+  "version": 3,
+  "isActive": true,
+  "license": null,
+  "settings": {
+    "theme": "dark",
+    "fontSize": 13,
+    "features": {
+      "liveReload": true,
+      "codeFolding": true,
+      "nestedDepthLimit": 10
+    }
+  },
+  "modules": [
+    {
+      "id": 101,
+      "name": "Parser Engine",
+      "stable": true,
+      "module": [
+        {
+          "id": 101,
+          "name": "Parser Engine",
+          "stable": true
+        },
+        {
+          "id": 102,
+          "name": "Tree Visualizer",
+          "stable": true
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "name": "Tree Visualizer",
+      "stable": true
+    }
+  ]
+}</textarea>
+      </div>
+    </div>
+    <div class="editor-footer" id="editor-footer">
+      <span style="color: var(--text-muted);">Status: Ready</span>
+    </div>
+  </div>
   <!-- Top Navigation Header -->
   <header class="top-nav">
     <div class="brand">
@@ -466,6 +761,27 @@
         </div>
       </div>
 
+  <!-- Tree View Output Pane -->
+  <div class="pane" id="tree-pane">
+    <div class="header">
+      <span>Tree Hierarchy</span>
+      <div class="actions">
+        <!-- 2. Tree Hierarchy Search Bar -->
+        <div class="search-box">
+          <input type="text" id="tree-search-input" class="search-input" placeholder="Search tree..." />
+          <span id="tree-search-count" class="search-count">0/0</span>
+          <button id="tree-search-prev" class="search-nav-btn" title="Previous match (Shift+Enter)">▲</button>
+          <button id="tree-search-next" class="search-nav-btn" title="Next match (Enter)">▼</button>
+        </div>
+
+        <button id="btn-expand-all">Expand All</button>
+        <button id="btn-collapse-all">Collapse All</button>
+        <button id="btn-close-tree" class="close-btn" title="Close Tree View">✕</button>
+      </div>
+    </div>
+    <div id="viewer-output"></div>
+  </div>
+</div>
       <!-- Tree Hierarchy Output Pane -->
       <div class="pane" id="tree-pane">
         <div class="header">
@@ -492,10 +808,33 @@
   const jsonInput = document.getElementById('json-input');
   const lineNumbers = document.getElementById('line-numbers');
   const rawBackdrop = document.getElementById('raw-backdrop');
+  const rawBackdrop = document.getElementById('raw-backdrop');
   const treePane = document.getElementById('tree-pane');
   const appContainer = document.getElementById('app-container');
   const treeToggle = document.getElementById('tree-toggle');
   const viewerOutput = document.getElementById('viewer-output');
+  const editorFooter = document.getElementById('editor-footer');
+  const btnCloseTree = document.getElementById('btn-close-tree');
+
+  // Search 1: Raw JSON Editor
+  const rawSearchInput = document.getElementById('raw-search-input');
+  const rawSearchCount = document.getElementById('raw-search-count');
+  const rawSearchPrev = document.getElementById('raw-search-prev');
+  const rawSearchNext = document.getElementById('raw-search-next');
+  let rawSearchIndices = [];
+  let currentRawMatchIndex = -1;
+
+  // Search 2: Tree Viewer
+  const treeSearchInput = document.getElementById('tree-search-input');
+  const treeSearchCount = document.getElementById('tree-search-count');
+  const treeSearchPrev = document.getElementById('tree-search-prev');
+  const treeSearchNext = document.getElementById('tree-search-next');
+  let treeMatches = [];
+  let currentTreeMatchIndex = -1;
+
+  let errorLinesSet = new Set();
+
+  // 1. Line Numbers with Multi-Error Highlighting
   const editorFooter = document.getElementById('editor-footer');
   const btnCloseTree = document.getElementById('btn-close-tree');
   const navToDiff = document.getElementById('nav-to-diff');
@@ -527,11 +866,15 @@
     for (let i = 1; i <= lines; i++) {
       const isErr = errorLinesSet.has(i);
       html += `<div class="${isErr ? 'error-line' : ''}" data-line="${i}">${i}</div>`;
+      const isErr = errorLinesSet.has(i);
+      html += `<div class="${isErr ? 'error-line' : ''}" data-line="${i}">${i}</div>`;
     }
     lineNumbers.innerHTML = html;
   }
 
   jsonInput.addEventListener('input', () => {
+    validateAndProcess();
+    applyRawSearch();
     validateAndProcess();
     applyRawSearch();
     localStorage.setItem('shared_json_left', jsonInput.value);
@@ -541,8 +884,14 @@
     lineNumbers.scrollTop = jsonInput.scrollTop;
     rawBackdrop.scrollTop = jsonInput.scrollTop;
     rawBackdrop.scrollLeft = jsonInput.scrollLeft;
+    rawBackdrop.scrollTop = jsonInput.scrollTop;
+    rawBackdrop.scrollLeft = jsonInput.scrollLeft;
   });
 
+  // 2. Tree View Visibility
+  function setTreeViewVisibility(show) {
+    treeToggle.checked = show;
+    if (show) {
   function setTreeViewVisibility(show) {
     treeToggle.checked = show;
     if (show) {
@@ -550,10 +899,188 @@
       appContainer.classList.remove('single-pane');
       validateAndProcess();
       applyTreeSearch();
+      validateAndProcess();
+      applyTreeSearch();
     } else {
       treePane.style.display = 'none';
       appContainer.classList.add('single-pane');
     }
+  }
+
+  treeToggle.addEventListener('change', (e) => setTreeViewVisibility(e.target.checked));
+  btnCloseTree.addEventListener('click', () => setTreeViewVisibility(false));
+
+  // 3. Multi-Error JSON Scanner
+  function scanAllErrors(raw) {
+    const errors = [];
+    const lines = raw.split('\n');
+    const stack = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const lineNum = i + 1;
+      const originalLine = lines[i];
+      const trimmed = originalLine.trim();
+
+      if (!trimmed) continue;
+
+      let quoteCount = 0;
+      for (let c = 0; c < originalLine.length; c++) {
+        if (originalLine[c] === '"' && (c === 0 || originalLine[c - 1] !== '\\')) {
+          quoteCount++;
+        }
+      }
+
+      if (quoteCount % 2 !== 0) {
+        if (/"[a-zA-Z0-9_-]+:/.test(originalLine)) {
+          errors.push({
+            line: lineNum,
+            msg: `Unclosed string & misplaced colon in key: <code>${escapeHtml(trimmed)}</code>`,
+            hint: `Ensure key is quoted before colon: <code>"id": 101</code> instead of <code>"id: 101</code>.`
+          });
+        } else {
+          errors.push({
+            line: lineNum,
+            msg: `Unclosed string quote.`,
+            hint: `Make sure opening quotes have matching closing quotes.`
+          });
+        }
+      }
+
+      if (/"[a-zA-Z0-9_-]+:"\s*[^,\s]/.test(originalLine)) {
+        errors.push({
+          line: lineNum,
+          msg: `Colon inside string quotes.`,
+          hint: `Move the colon outside: change <code>"key:"</code> to <code>"key":</code>.`
+        });
+      }
+
+      if (/'[^']*'/.test(originalLine) && !/"/.test(originalLine)) {
+        errors.push({
+          line: lineNum,
+          msg: `Single quotes used.`,
+          hint: `JSON requires double quotes <code>"</code>.`
+        });
+      }
+
+      const endsWithValue = /(".*"|\d+|true|false|null|\]|\})$/.test(trimmed);
+      if (endsWithValue) {
+        for (let j = i + 1; j < lines.length; j++) {
+          const nextTrimmed = lines[j].trim();
+          if (!nextTrimmed) continue;
+          if (/^(".*"|{|\[)/.test(nextTrimmed) && !nextTrimmed.startsWith('}') && !nextTrimmed.startsWith(']')) {
+            errors.push({
+              line: lineNum,
+              msg: `Missing comma at line end.`,
+              hint: `Add a comma <code>,</code> after <code>${escapeHtml(trimmed)}</code>.`
+            });
+          }
+          break;
+        }
+      }
+
+      if (trimmed.endsWith(',') && i + 1 < lines.length) {
+        for (let j = i + 1; j < lines.length; j++) {
+          const nextTrimmed = lines[j].trim();
+          if (!nextTrimmed) continue;
+          if (nextTrimmed.startsWith('}') || nextTrimmed.startsWith(']')) {
+            errors.push({
+              line: lineNum,
+              msg: `Trailing comma before closing bracket <code>${nextTrimmed[0]}</code>.`,
+              hint: `Remove the trailing comma.`
+            });
+          }
+          break;
+        }
+      }
+
+      let inString = false;
+      for (let c = 0; c < originalLine.length; c++) {
+        const char = originalLine[c];
+        if (char === '"' && (c === 0 || originalLine[c - 1] !== '\\')) {
+          inString = !inString;
+        }
+        if (!inString) {
+          if (char === '{' || char === '[') {
+            stack.push({ char, line: lineNum });
+          } else if (char === '}' || char === ']') {
+            if (stack.length === 0) {
+              errors.push({
+                line: lineNum,
+                msg: `Unmatched closing bracket <code>${char}</code>.`,
+                hint: `No matching opening bracket found.`
+              });
+            } else {
+              const last = stack.pop();
+              if ((char === '}' && last.char !== '{') || (char === ']' && last.char !== '[')) {
+                errors.push({
+                  line: lineNum,
+                  msg: `Mismatched bracket: closed <code>${char}</code> but opened <code>${last.char}</code> on line ${last.line}.`,
+                  hint: `Ensure matching brackets.`
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    while (stack.length > 0) {
+      const unclosed = stack.pop();
+      errors.push({
+        line: unclosed.line,
+        msg: `Unclosed bracket <code>${unclosed.char}</code>.`,
+        hint: `Missing closing bracket <code>${unclosed.char === '{' ? '}' : ']'}</code>.`
+      });
+    }
+
+    if (errors.length === 0) {
+      try {
+        JSON.parse(raw);
+      } catch (err) {
+        let line = 1;
+        const lineColMatch = err.message.match(/line (\d+)/i);
+        if (lineColMatch) {
+          line = parseInt(lineColMatch[1], 10);
+        } else {
+          const posMatch = err.message.match(/position (\d+)/i);
+          if (posMatch) {
+            const pos = parseInt(posMatch[1], 10);
+            line = raw.slice(0, pos).split('\n').length;
+          }
+        }
+        errors.push({
+          line,
+          msg: escapeHtml(err.message),
+          hint: `Please check JSON syntax on or around this line.`
+        });
+      }
+    }
+
+    const unique = [];
+    const seen = new Set();
+    for (const item of errors) {
+      const key = `${item.line}-${item.msg}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(item);
+      }
+    }
+
+    return unique.sort((a, b) => a.line - b.line);
+  }
+
+  // 4. Validation Pipeline
+  function validateAndProcess() {
+    const raw = jsonInput.value;
+
+    if (!raw.trim()) {
+      errorLinesSet.clear();
+      updateLineNumbers();
+      editorFooter.className = 'editor-footer';
+      editorFooter.innerHTML = '<span style="color: var(--text-muted);">Status: Ready (Empty document)</span>';
+      if (treeToggle.checked) {
+        viewerOutput.innerHTML = '<span style="color: var(--text-muted);">No JSON data to display.</span>';
+      }
   }
 
   treeToggle.addEventListener('change', (e) => setTreeViewVisibility(e.target.checked));
@@ -683,6 +1210,62 @@
     try {
       parsedData = JSON.parse(raw);
       isNativeValid = true;
+    } catch {
+      isNativeValid = false;
+    }
+
+    if (isNativeValid) {
+      errorLinesSet.clear();
+      updateLineNumbers();
+
+      editorFooter.className = 'editor-footer';
+      editorFooter.innerHTML = '<span style="color: #4ade80; font-weight: 600;">✓ Valid JSON (0 errors)</span>';
+
+      if (treeToggle.checked) {
+        viewerOutput.innerHTML = '';
+        viewerOutput.appendChild(buildTreeNode(parsedData, null, true));
+        applyTreeSearch();
+      }
+    } else {
+      const detectedErrors = scanAllErrors(raw);
+      errorLinesSet = new Set(detectedErrors.map(e => e.line));
+      updateLineNumbers();
+
+      editorFooter.className = 'editor-footer has-error';
+      let errHtml = `<div style="font-weight: 700; color: #f87171; margin-bottom: 6px;">✕ ${detectedErrors.length} Syntax Error${detectedErrors.length > 1 ? 's' : ''} Detected:</div>`;
+
+      detectedErrors.forEach((err, idx) => {
+        errHtml += `
+          <div class="error-item">
+            <div class="error-title-row">
+              <span class="error-tag">Error ${idx + 1}</span>
+              <span class="error-line-badge">Line ${err.line}</span>
+              <span class="error-msg">${err.msg}</span>
+            </div>
+            <div class="error-hint"><strong>Fix:</strong> ${err.hint}</div>
+          </div>
+        `;
+      });
+
+      editorFooter.innerHTML = errHtml;
+
+      if (treeToggle.checked) {
+        viewerOutput.innerHTML = `
+          <div style="color: #f87171; background: rgba(239,68,68,0.1); padding: 14px; border-radius: 6px; border: 1px solid rgba(239,68,68,0.3);">
+            <strong style="text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px;">Invalid JSON (${detectedErrors.length} Errors)</strong>
+            <p style="margin-top: 6px; font-size: 12px;">Fix the highlighted errors in the raw JSON editor to enable tree rendering.</p>
+          </div>
+        `;
+      }
+    }
+  }
+
+  // 5. Tree Node Constructor
+    let isNativeValid = false;
+    let parsedData = null;
+    try {
+      parsedData = JSON.parse(raw);
+      isNativeValid = true;
     } catch { isNativeValid = false; }
 
     if (isNativeValid) {
@@ -743,6 +1326,9 @@
       caret.textContent = '▼';
 
       let keyPrefix = '';
+      if (key !== null) {
+        keyPrefix = `<span class="key" data-search-target="true">"${escapeHtml(key)}"</span>: `;
+      }
       if (key !== null) keyPrefix = `<span class="key" data-search-target="true">"${escapeHtml(key)}"</span>: `;
 
       row.innerHTML = `${keyPrefix}<span class="bracket">${openBracket}</span>`;
@@ -753,6 +1339,8 @@
       summaryBadge.textContent = `${count} ${isArray ? 'items' : 'keys'} ${closeBracket}`;
       row.appendChild(summaryBadge);
 
+      const toggleCollapse = (e) => {
+        e.stopPropagation();
       const toggleCollapse = (e) => {
         e.stopPropagation();
         container.classList.toggle('collapsed');
@@ -780,12 +1368,24 @@
       row.className = 'tree-row';
 
       let formattedVal = '';
+      if (typeof val === 'string') {
+        formattedVal = `<span class="str" data-search-target="true">"${escapeHtml(val)}"</span>`;
+      } else if (typeof val === 'number') {
+        formattedVal = `<span class="num" data-search-target="true">${val}</span>`;
+      } else if (typeof val === 'boolean') {
+        formattedVal = `<span class="bool" data-search-target="true">${val}</span>`;
+      } else if (val === null) {
+        formattedVal = `<span class="null" data-search-target="true">null</span>`;
+      }
       if (typeof val === 'string') formattedVal = `<span class="str" data-search-target="true">"${escapeHtml(val)}"</span>`;
       else if (typeof val === 'number') formattedVal = `<span class="num" data-search-target="true">${val}</span>`;
       else if (typeof val === 'boolean') formattedVal = `<span class="bool" data-search-target="true">${val}</span>`;
       else if (val === null) formattedVal = `<span class="null" data-search-target="true">null</span>`;
 
       let keyPrefix = '';
+      if (key !== null) {
+        keyPrefix = `<span class="key" data-search-target="true">"${escapeHtml(key)}"</span>: `;
+      }
       if (key !== null) keyPrefix = `<span class="key" data-search-target="true">"${escapeHtml(key)}"</span>: `;
 
       row.innerHTML = `<span style="width:16px; display:inline-block;"></span>${keyPrefix}${formattedVal}${!isLast ? '<span class="comma">,</span>' : ''}`;
@@ -798,6 +1398,177 @@
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  // ==========================================
+  // SEARCH 1: Raw JSON Editor Search
+  // ==========================================
+  function applyRawSearch() {
+    const query = rawSearchInput.value;
+    const text = jsonInput.value;
+    rawSearchIndices = [];
+    currentRawMatchIndex = -1;
+
+    if (!query) {
+      rawBackdrop.innerHTML = '';
+      rawSearchCount.textContent = '0/0';
+      return;
+    }
+
+    const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      rawSearchIndices.push({ start: match.index, end: match.index + match[0].length });
+    }
+
+    if (rawSearchIndices.length > 0) {
+      currentRawMatchIndex = 0;
+      updateRawHighlights();
+    } else {
+      rawBackdrop.innerHTML = escapeHtml(text);
+      rawSearchCount.textContent = '0/0';
+    }
+  }
+
+  function updateRawHighlights() {
+    const text = jsonInput.value;
+    if (rawSearchIndices.length === 0) {
+      rawBackdrop.innerHTML = '';
+      rawSearchCount.textContent = '0/0';
+      return;
+    }
+
+    let html = '';
+    let lastIndex = 0;
+
+    rawSearchIndices.forEach((pos, idx) => {
+      html += escapeHtml(text.substring(lastIndex, pos.start));
+      const matchText = escapeHtml(text.substring(pos.start, pos.end));
+      const isActive = idx === currentRawMatchIndex;
+      html += `<mark class="highlight ${isActive ? 'active-match' : ''}">${matchText}</mark>`;
+      lastIndex = pos.end;
+    });
+    html += escapeHtml(text.substring(lastIndex));
+
+    rawBackdrop.innerHTML = html;
+    rawSearchCount.textContent = `${currentRawMatchIndex + 1}/${rawSearchIndices.length}`;
+
+    // Auto-scroll raw textarea to the active match
+    if (currentRawMatchIndex >= 0) {
+      const active = rawSearchIndices[currentRawMatchIndex];
+      const upToMatch = text.substring(0, active.start);
+      const lineNumber = upToMatch.split('\n').length;
+      const lineHeight = 19.5;
+      const targetScroll = (lineNumber - 4) * lineHeight;
+      jsonInput.scrollTop = Math.max(0, targetScroll);
+      lineNumbers.scrollTop = jsonInput.scrollTop;
+      rawBackdrop.scrollTop = jsonInput.scrollTop;
+    }
+  }
+
+  function navigateRawSearch(direction) {
+    if (rawSearchIndices.length === 0) return;
+    currentRawMatchIndex = (currentRawMatchIndex + direction + rawSearchIndices.length) % rawSearchIndices.length;
+    updateRawHighlights();
+  }
+
+  rawSearchInput.addEventListener('input', applyRawSearch);
+  rawSearchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      navigateRawSearch(e.shiftKey ? -1 : 1);
+    }
+  });
+  rawSearchNext.addEventListener('click', () => navigateRawSearch(1));
+  rawSearchPrev.addEventListener('click', () => navigateRawSearch(-1));
+
+  // ==========================================
+  // SEARCH 2: Tree Hierarchy Search
+  // ==========================================
+  function highlightTreeNodes(element, query) {
+    if (!query) return;
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const targets = element.querySelectorAll('[data-search-target="true"]');
+
+    targets.forEach(node => {
+      const text = node.textContent;
+      if (regex.test(text)) {
+        node.innerHTML = text.replace(regex, '<mark class="highlight">$1</mark>');
+        
+        // Auto-expand collapsed parents
+        let parent = node.closest('.tree-item.collapsed');
+        while (parent) {
+          parent.classList.remove('collapsed');
+          parent = parent.parentElement ? parent.parentElement.closest('.tree-item.collapsed') : null;
+        }
+      }
+    });
+  }
+
+  function applyTreeSearch() {
+    if (!treeToggle.checked) return;
+
+    const query = treeSearchInput.value.trim();
+    treeMatches = [];
+    currentTreeMatchIndex = -1;
+
+    if (!query) {
+      treeSearchCount.textContent = '0/0';
+      return;
+    }
+
+    highlightTreeNodes(viewerOutput, query);
+    treeMatches = Array.from(viewerOutput.querySelectorAll('mark.highlight'));
+
+    if (treeMatches.length > 0) {
+      currentTreeMatchIndex = 0;
+      updateActiveTreeMatch();
+    } else {
+      treeSearchCount.textContent = '0/0';
+    }
+  }
+
+  function updateActiveTreeMatch() {
+    if (treeMatches.length === 0) {
+      treeSearchCount.textContent = '0/0';
+      return;
+    }
+
+    treeMatches.forEach((el, i) => {
+      if (i === currentTreeMatchIndex) {
+        el.classList.add('active-match');
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        el.classList.remove('active-match');
+      }
+    });
+
+    treeSearchCount.textContent = `${currentTreeMatchIndex + 1}/${treeMatches.length}`;
+  }
+
+  function navigateTreeSearch(direction) {
+    if (treeMatches.length === 0) return;
+    currentTreeMatchIndex = (currentTreeMatchIndex + direction + treeMatches.length) % treeMatches.length;
+    updateActiveTreeMatch();
+  }
+
+  treeSearchInput.addEventListener('input', () => {
+    if (treeToggle.checked) {
+      validateAndProcess();
+    }
+  });
+
+  treeSearchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      navigateTreeSearch(e.shiftKey ? -1 : 1);
+    }
+  });
+
+  treeSearchNext.addEventListener('click', () => navigateTreeSearch(1));
+  treeSearchPrev.addEventListener('click', () => navigateTreeSearch(-1));
+
+  // ==========================================
+  // Action Handlers
+  // ==========================================
   function applyRawSearch() {
     const query = rawSearchInput.value;
     const text = jsonInput.value;
@@ -944,6 +1715,11 @@
 
   document.getElementById('btn-format').addEventListener('click', () => {
     try {
+      const obj = JSON.parse(jsonInput.value);
+      jsonInput.value = JSON.stringify(obj, null, 2);
+      validateAndProcess();
+      applyRawSearch();
+    } catch { validateAndProcess(); }
       jsonInput.value = JSON.stringify(JSON.parse(jsonInput.value), null, 2);
       validateAndProcess();
       applyRawSearch();
@@ -952,6 +1728,11 @@
 
   document.getElementById('btn-minify').addEventListener('click', () => {
     try {
+      const obj = JSON.parse(jsonInput.value);
+      jsonInput.value = JSON.stringify(obj);
+      validateAndProcess();
+      applyRawSearch();
+    } catch { validateAndProcess(); }
       jsonInput.value = JSON.stringify(JSON.parse(jsonInput.value));
       validateAndProcess();
       applyRawSearch();
@@ -960,6 +1741,12 @@
 
   document.getElementById('btn-clear').addEventListener('click', () => {
     jsonInput.value = '';
+    rawSearchInput.value = '';
+    treeSearchInput.value = '';
+    rawSearchCount.textContent = '0/0';
+    treeSearchCount.textContent = '0/0';
+    validateAndProcess();
+    applyRawSearch();
     rawSearchInput.value = '';
     treeSearchInput.value = '';
     rawSearchCount.textContent = '0/0';
@@ -978,6 +1765,7 @@
     });
   });
 
+  // Initial Execution
   // Initial Load from localStorage or Default
   const savedJson = localStorage.getItem('shared_json_left');
   if (savedJson) {
@@ -1005,6 +1793,7 @@
   }
 
   updateLineNumbers();
+  validateAndProcess();
   validateAndProcess();
 </script>
 </body>
