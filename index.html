@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>JSON Tree Viewer</title>
+  <title>JSON Tree Viewer & Formatter</title>
   <style>
     :root {
       --bg: #0b0f19;
@@ -19,6 +19,9 @@
       --bool-color: #c084fc;
       --null-color: #f43f5e;
       --gutter-bg: #0d1321;
+      --error-bg: rgba(239, 68, 68, 0.1);
+      --error-border: rgba(239, 68, 68, 0.3);
+      --error-text: #f87171;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -36,7 +39,7 @@
       grid-template-columns: 1fr 1fr;
       gap: 16px;
       height: calc(100vh - 32px);
-      transition: grid-template-columns 0.3s ease;
+      transition: grid-template-columns 0.25s ease;
     }
 
     .app-container.single-pane {
@@ -101,7 +104,7 @@
     .switch {
       position: relative;
       display: inline-block;
-      width: 38px;
+      width: 36px;
       height: 20px;
     }
     .switch input { opacity: 0; width: 0; height: 0; }
@@ -110,7 +113,7 @@
       cursor: pointer;
       top: 0; left: 0; right: 0; bottom: 0;
       background-color: #374151;
-      transition: .3s;
+      transition: .25s;
       border-radius: 20px;
     }
     .slider:before {
@@ -121,11 +124,11 @@
       left: 3px;
       bottom: 3px;
       background-color: white;
-      transition: .3s;
+      transition: .25s;
       border-radius: 50%;
     }
     input:checked + .slider { background-color: var(--accent); }
-    input:checked + .slider:before { transform: translateX(18px); }
+    input:checked + .slider:before { transform: translateX(16px); }
 
     /* Editor with Line Numbers */
     .editor-wrapper {
@@ -201,7 +204,7 @@
       transition: transform 0.15s ease;
     }
     .caret-btn:hover { color: #fff; background: #2d3748; }
-    
+
     .collapsed > .tree-row > .caret-btn {
       transform: rotate(-90deg);
     }
@@ -232,12 +235,33 @@
     .null { color: var(--null-color); font-weight: bold; }
     .comma { color: #94a3b8; }
 
+    /* Error Notification Box */
     .error-box {
-      color: #f87171;
-      background: rgba(239, 68, 68, 0.1);
-      padding: 12px;
+      color: var(--error-text);
+      background: var(--error-bg);
+      padding: 14px 16px;
       border-radius: 6px;
-      border: 1px solid rgba(239, 68, 68, 0.25);
+      border: 1px solid var(--error-border);
+      line-height: 1.6;
+    }
+    .error-badge {
+      display: inline-block;
+      background: #ef4444;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .error-loc {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(239, 68, 68, 0.2);
+      font-size: 12px;
+      color: #fca5a5;
     }
   </style>
 </head>
@@ -266,7 +290,7 @@
       <textarea id="json-input" spellcheck="false" placeholder="Paste or type JSON here...">
 {
   "application": "JSON Viewer Suite",
-  "version": 3.0,
+  "version": 3,
   "isActive": true,
   "license": null,
   "settings": {
@@ -279,8 +303,28 @@
     }
   },
   "modules": [
-    { "id": 101, "name": "Parser Engine", "stable": true },
-    { "id": 102, "name": "Tree Visualizer", "stable": true }
+    {
+      "id": 101,
+      "name": "Parser Engine",
+      "stable": true,
+      "module": [
+        {
+          "id": 101,
+          "name": "Parser Engine",
+          "stable": true
+        },
+        {
+          "id": 102,
+          "name": "Tree Visualizer",
+          "stable": true
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "name": "Tree Visualizer",
+      "stable": true
+    }
   ]
 }</textarea>
     </div>
@@ -307,7 +351,7 @@
   const treeToggle = document.getElementById('tree-toggle');
   const viewerOutput = document.getElementById('viewer-output');
 
-  // 1. Line Numbers Generation & Scrolling Synchronization
+  // 1. Line Numbers Generation & Scrolling Sync
   function updateLineNumbers() {
     const lines = jsonInput.value.split('\n').length;
     let html = '';
@@ -340,7 +384,30 @@
     }
   });
 
-  // 3. Tree Parser & Node Builder with Isolated Expand/Collapse
+  // 3. Error Location Detection (Line & Column Calculation)
+  function getErrorLocation(raw, err) {
+    // Check if error message explicitly provides line/column
+    const lineColMatch = err.message.match(/line (\d+) column (\d+)/i) || err.message.match(/at line (\d+) column (\d+)/i);
+    if (lineColMatch) {
+      return { line: parseInt(lineColMatch[1], 10), column: parseInt(lineColMatch[2], 10) };
+    }
+
+    // Check if character position is provided (e.g. "at position 245")
+    const posMatch = err.message.match(/position (\d+)/i);
+    if (posMatch) {
+      const pos = parseInt(posMatch[1], 10);
+      const textUpToError = raw.slice(0, pos);
+      const lines = textUpToError.split('\n');
+      return {
+        line: lines.length,
+        column: lines[lines.length - 1].length + 1
+      };
+    }
+
+    return null;
+  }
+
+  // 4. Tree Parser & Node Builder
   function parseAndRenderTree() {
     const raw = jsonInput.value.trim();
     if (!raw) {
@@ -353,7 +420,17 @@
       viewerOutput.innerHTML = '';
       viewerOutput.appendChild(buildTreeNode(parsed, null, true));
     } catch (err) {
-      viewerOutput.innerHTML = `<div class="error-box"><strong>JSON Syntax Error:</strong><br>${err.message}</div>`;
+      const loc = getErrorLocation(jsonInput.value, err);
+      const locHtml = loc
+        ? `<div class="error-loc">📍 <strong>Error detected at:</strong> Line <code>${loc.line}</code>, Column <code>${loc.column}</code></div>`
+        : '';
+
+      viewerOutput.innerHTML = `
+        <div class="error-box">
+          <div class="error-badge">Syntax Error</div>
+          <div>${escapeHtml(err.message)}</div>
+          ${locHtml}
+        </div>`;
     }
   }
 
@@ -399,7 +476,7 @@
       caret.addEventListener('click', toggleCollapse);
       summaryBadge.addEventListener('click', toggleCollapse);
 
-      // Child Items
+      // Child Items Container
       const childrenWrapper = document.createElement('div');
       childrenWrapper.className = 'tree-children';
 
@@ -409,7 +486,7 @@
         childrenWrapper.appendChild(childNode);
       });
 
-      // Closing Bracket
+      // Closing Bracket Row
       const closingRow = document.createElement('div');
       closingRow.className = 'tree-row';
       closingRow.innerHTML = `<span class="bracket">${closeBracket}</span>${!isLast ? '<span class="comma">,</span>' : ''}`;
@@ -449,7 +526,7 @@
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  // 4. Global Action Buttons
+  // 5. Toolbar Actions
   document.getElementById('btn-format').addEventListener('click', () => {
     try {
       const obj = JSON.parse(jsonInput.value);
@@ -486,7 +563,7 @@
     });
   });
 
-  // Initialize on load
+  // Initial Execution on Load
   updateLineNumbers();
   parseAndRenderTree();
 </script>
