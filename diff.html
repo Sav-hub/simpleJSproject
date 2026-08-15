@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JSON Studio - Side-by-Side Diff</title>
+  <style>
+    /* =========================================
+       1. THEME DEFINITIONS (CSS VARIABLES)
+       ========================================= */
+    :root {
+      /* Default: Grey Theme */
+      --bg: #1e2430;
+      --panel-bg: #282f3d;
+      --panel-header: #323b4c;
+      --border: #3f4a5f;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --editor-bg: #181d27;
+      --gutter-bg: #141820;
+      --btn-bg: #1e2430;
+      --btn-hover: rgba(255, 255, 255, 0.08);
+
+      /* In-Line Diff Highlighting */
+      --diff-add-bg: rgba(34, 197, 94, 0.18);
+      --diff-add-gutter: #22c55e;
+      --diff-del-bg: rgba(239, 68, 68, 0.18);
+      --diff-del-gutter: #ef4444;
+      --diff-mod-bg: rgba(234, 179, 8, 0.18);
+      --diff-mod-gutter: #eab308;
+    }
+
+    body.dark-theme {
+      /* Midnight / Deep Dark Theme */
+      --bg: #0b0f19;
+      --panel-bg: #111827;
+      --panel-header: #151d30;
+      --border: #1f2937;
+      --text: #e5e7eb;
+      --text-muted: #6b7280;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --editor-bg: #0d1117;
+      --gutter-bg: #0d1321;
+      --btn-bg: #1f2937;
+      --btn-hover: #374151;
+
+      /* In-Line Diff Highlighting */
+      --diff-add-bg: rgba(34, 197, 94, 0.18);
+      --diff-add-gutter: #22c55e;
+      --diff-del-bg: rgba(239, 68, 68, 0.18);
+      --diff-del-gutter: #ef4444;
+      --diff-mod-bg: rgba(234, 179, 8, 0.18);
+      --diff-mod-gutter: #eab308;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    /* Top Navigation Header */
+    .top-nav {
+      background: var(--panel-header);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      height: 48px;
+      flex-shrink: 0;
+    }
+    .brand {
+      font-weight: 700;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #fff;
+    }
+    .brand span { color: var(--accent); }
+    
+    .nav-tabs { 
+      display: flex; 
+      align-items: center; 
+      gap: 8px; 
+    }
+    .tab-link {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tab-link:hover { color: var(--text); background: var(--btn-hover); }
+    .tab-link.active {
+      background: var(--panel-bg);
+      color: #fff;
+      border-color: var(--border);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    /* Theme Switcher Button */
+    .theme-toggle-btn {
+      background: var(--panel-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+    .theme-toggle-btn:hover {
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .main-view {
+      flex: 1;
+      padding: 14px;
+      height: calc(100vh - 48px);
+      overflow: hidden;
+    }
+
+    .app-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      height: 100%;
+    }
+
+    .pane {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      height: 100%;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: var(--panel-header);
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 600;
+      gap: 8px;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      background: var(--btn-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 4px 9px;
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      user-select: none;
+    }
+    button:hover { background: var(--btn-hover); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.primary:hover { background: var(--accent-hover); }
+
+    /* Editor Layout */
+    .editor-wrapper {
+      flex: 1;
+      display: flex;
+      position: relative;
+      overflow: hidden;
+      background: var(--editor-bg);
+    }
+
+    .line-numbers {
+      width: 48px;
+      padding: 14px 6px 14px 0;
+      text-align: right;
+      background: var(--gutter-bg);
+      color: var(--text-muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      user-select: none;
+      border-right: 1px solid var(--border);
+      overflow: hidden;
+      z-index: 3;
+    }
+    .line-numbers div {
+      height: 19.5px;
+      padding-right: 6px;
+      position: relative;
+    }
+
+    /* Gutter Diff Indicators */
+    .line-numbers div.gutter-add {
+      background: rgba(34, 197, 94, 0.25);
+      color: #4ade80;
+      font-weight: 700;
+    }
+    .line-numbers div.gutter-add::after {
+      content: "+";
+      position: absolute;
+      right: 2px;
+      top: 0;
+      font-weight: bold;
+      color: #4ade80;
+    }
+
+    .line-numbers div.gutter-del {
+      background: rgba(239, 68, 68, 0.25);
+      color: #f87171;
+      font-weight: 700;
+    }
+    .line-numbers div.gutter-del::after {
+      content: "-";
+      position: absolute;
+      right: 2px;
+      top: 0;
+      font-weight: bold;
+      color: #f87171;
+    }
+
+    .line-numbers div.gutter-mod {
+      background: rgba(234, 179, 8, 0.25);
+      color: #facc15;
+      font-weight: 700;
+    }
+    .line-numbers div.gutter-mod::after {
+      content: "~";
+      position: absolute;
+      right: 2px;
+      top: 0;
+      font-weight: bold;
+      color: #facc15;
+    }
+
+    .textarea-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .backdrop-layer, textarea {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 14px;
+      margin: 0;
+      border: 0;
+      box-sizing: border-box;
+      white-space: pre;
+      letter-spacing: 0;
+      tab-size: 2;
+    }
+
+    .backdrop-layer {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 1;
+      background: transparent;
+    }
+
+    textarea {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: transparent;
+      color: var(--text);
+      resize: none;
+      outline: none;
+      overflow-wrap: normal;
+      overflow-x: auto;
+      z-index: 2;
+    }
+
+    /* Diff Highlight Rows */
+    .diff-line-bg {
+      height: 19.5px;
+      display: block;
+      width: 100%;
+    }
+    .diff-line-bg.line-added {
+      background-color: var(--diff-add-bg);
+      border-left: 3px solid var(--diff-add-gutter);
+    }
+    .diff-line-bg.line-deleted {
+      background-color: var(--diff-del-bg);
+      border-left: 3px solid var(--diff-del-gutter);
+    }
+    .diff-line-bg.line-modified {
+      background-color: var(--diff-mod-bg);
+      border-left: 3px solid var(--diff-mod-gutter);
+    }
+
+    /* Sync Scroll Button & Status Indicator */
+    button.sync-scroll-btn {
+      font-size: 11px;
+      font-weight: 600;
+      gap: 5px;
+    }
+    button.sync-scroll-btn.active {
+      background: #1e1b4b;
+      border-color: var(--accent);
+      color: #c7d2fe;
+    }
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #94a3b8;
+    }
+    button.sync-scroll-btn.active .status-dot {
+      background: #4ade80;
+      box-shadow: 0 0 6px #4ade80;
+    }
+
+    /* Change Filters */
+    .diff-filters {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .filter-btn {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+      opacity: 0.65;
+    }
+    .filter-btn:hover { opacity: 0.95; }
+    .filter-btn.active {
+      opacity: 1;
+      box-shadow: 0 0 0 1px currentColor;
+    }
+    .filter-all { background: var(--btn-bg); color: var(--text); border-color: var(--border); }
+    .filter-add { background: var(--diff-add-bg); border-color: rgba(34,197,94,0.4); color: #4ade80; }
+    .filter-del { background: var(--diff-del-bg); border-color: rgba(239,68,68,0.4); color: #f87171; }
+    .filter-mod { background: var(--diff-mod-bg); border-color: rgba(234,179,8,0.4); color: #facc15; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="top-nav">
+    <div class="brand">
+      JSON <span>Studio</span>
+    </div>
+    <div class="nav-tabs">
+      <a href="index.html" class="tab-link" id="nav-to-viewer">🛠 Viewer & Tree</a>
+      <a href="diff.html" class="tab-link active">⚖️ In-Line Diff Compare</a>
+      
+      <!-- Theme Switcher Button -->
+      <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle between Grey and Dark Theme">
+        <span id="theme-icon">🌙</span>
+        <span id="theme-label">Dark Theme</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Side-by-Side Diff Workspace -->
+  <main class="main-view">
+    <div class="app-container">
+      <!-- Original JSON (Left) -->
+      <div class="pane">
+        <div class="header">
+          <span>Original (Left) JSON</span>
+          <div class="actions">
+            <button class="sync-scroll-btn active" id="btn-sync-scroll" title="Synchronize scrolling between both editors">
+              <span class="status-dot"></span>
+              <span id="sync-scroll-label">Sync Scroll: ON</span>
+            </button>
+            <button id="btn-diff-load-sample" class="primary" title="Load sample dataset">Load Test Data</button>
+            <button id="btn-diff-format-left">Format</button>
+            <button id="btn-diff-clear-left">Clear</button>
+          </div>
+        </div>
+        <div class="editor-wrapper">
+          <div class="line-numbers" id="diff-lines-left"></div>
+          <div class="textarea-container">
+            <div id="diff-backdrop-left" class="backdrop-layer"></div>
+            <textarea id="diff-input-left" spellcheck="false" placeholder="Paste original JSON..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modified JSON (Right) -->
+      <div class="pane">
+        <div class="header">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span>Modified (Right) JSON</span>
+            <div class="diff-filters">
+              <button class="filter-btn filter-all active" id="filter-btn-all">All</button>
+              <button class="filter-btn filter-add" id="filter-btn-add">+0 Added</button>
+              <button class="filter-btn filter-del" id="filter-btn-del">-0 Removed</button>
+              <button class="filter-btn filter-mod" id="filter-btn-mod">~0 Modified</button>
+            </div>
+          </div>
+          <div class="actions">
+            <button id="btn-diff-swap">⇄ Swap</button>
+            <button id="btn-diff-format-right">Format</button>
+            <button id="btn-diff-clear-right">Clear</button>
+          </div>
+        </div>
+        <div class="editor-wrapper">
+          <div class="line-numbers" id="diff-lines-right"></div>
+          <div class="textarea-container">
+            <div id="diff-backdrop-right" class="backdrop-layer"></div>
+            <textarea id="diff-input-right" spellcheck="false" placeholder="Paste modified JSON..."></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+<script>
+  // ==========================================
+  // 1. THEME SYSTEM (Grey <-> Dark)
+  // ==========================================
+  const themeToggleBtn = document.getElementById('theme-toggle-btn');
+  const themeIcon = document.getElementById('theme-icon');
+  const themeLabel = document.getElementById('theme-label');
+
+  function applyTheme(themeName) {
+    if (themeName === 'dark') {
+      document.body.classList.add('dark-theme');
+      themeIcon.textContent = '☀️';
+      themeLabel.textContent = 'Grey Theme';
+    } else {
+      document.body.classList.remove('dark-theme');
+      themeIcon.textContent = '🌙';
+      themeLabel.textContent = 'Dark Theme';
+    }
+    localStorage.setItem('json_studio_theme', themeName);
+  }
+
+  themeToggleBtn.addEventListener('click', () => {
+    const isDark = document.body.classList.contains('dark-theme');
+    applyTheme(isDark ? 'grey' : 'dark');
+  });
+
+  const savedTheme = localStorage.getItem('json_studio_theme') || 'grey';
+  applyTheme(savedTheme);
+
+  // ==========================================
+  // 2. DOM & STATE INITIALIZATION
+  // ==========================================
+  const diffInputLeft = document.getElementById('diff-input-left');
+  const diffInputRight = document.getElementById('diff-input-right');
+  const diffLinesLeft = document.getElementById('diff-lines-left');
+  const diffLinesRight = document.getElementById('diff-lines-right');
+  const diffBackdropLeft = document.getElementById('diff-backdrop-left');
+  const diffBackdropRight = document.getElementById('diff-backdrop-right');
+  const navToViewer = document.getElementById('nav-to-viewer');
+
+  const btnSyncScroll = document.getElementById('btn-sync-scroll');
+  const syncScrollLabel = document.getElementById('sync-scroll-label');
+
+  const filterBtnAll = document.getElementById('filter-btn-all');
+  const filterBtnAdd = document.getElementById('filter-btn-add');
+  const filterBtnDel = document.getElementById('filter-btn-del');
+  const filterBtnMod = document.getElementById('filter-btn-mod');
+
+  let syncScrollEnabled = true;
+  let isSyncingLeft = false;
+  let isSyncingRight = false;
+  let activeDiffFilter = 'ALL';
+
+  navToViewer.addEventListener('click', () => {
+    localStorage.setItem('shared_json_left', diffInputLeft.value);
+  });
+
+  // 3. Synchronized Scrolling
+  btnSyncScroll.addEventListener('click', () => {
+    syncScrollEnabled = !syncScrollEnabled;
+    btnSyncScroll.classList.toggle('active', syncScrollEnabled);
+    syncScrollLabel.textContent = syncScrollEnabled ? 'Sync Scroll: ON' : 'Sync Scroll: OFF';
+  });
+
+  diffInputLeft.addEventListener('scroll', () => {
+    diffLinesLeft.scrollTop = diffInputLeft.scrollTop;
+    diffBackdropLeft.scrollTop = diffInputLeft.scrollTop;
+    diffBackdropLeft.scrollLeft = diffInputLeft.scrollLeft;
+
+    if (!syncScrollEnabled || isSyncingLeft) return;
+    isSyncingRight = true;
+    diffInputRight.scrollTop = diffInputLeft.scrollTop;
+    diffInputRight.scrollLeft = diffInputLeft.scrollLeft;
+    diffLinesRight.scrollTop = diffInputLeft.scrollTop;
+    diffBackdropRight.scrollTop = diffInputLeft.scrollTop;
+    diffBackdropRight.scrollLeft = diffInputLeft.scrollLeft;
+    requestAnimationFrame(() => { isSyncingRight = false; });
+  });
+
+  diffInputRight.addEventListener('scroll', () => {
+    diffLinesRight.scrollTop = diffInputRight.scrollTop;
+    diffBackdropRight.scrollTop = diffInputRight.scrollTop;
+    diffBackdropRight.scrollLeft = diffInputRight.scrollLeft;
+
+    if (!syncScrollEnabled || isSyncingRight) return;
+    isSyncingLeft = true;
+    diffInputLeft.scrollTop = diffInputRight.scrollTop;
+    diffInputLeft.scrollLeft = diffInputRight.scrollLeft;
+    diffLinesLeft.scrollTop = diffInputRight.scrollTop;
+    diffBackdropLeft.scrollTop = diffInputRight.scrollTop;
+    diffBackdropLeft.scrollLeft = diffInputRight.scrollLeft;
+    requestAnimationFrame(() => { isSyncingLeft = false; });
+  });
+
+  diffInputLeft.addEventListener('input', () => {
+    localStorage.setItem('shared_json_left', diffInputLeft.value);
+    executeLineByLineDiff();
+  });
+  diffInputRight.addEventListener('input', executeLineByLineDiff);
+
+  // 4. LCS Line Diff Algorithm
+  function computeLineDiff(linesA, linesB) {
+    const N = linesA.length;
+    const M = linesB.length;
+    const dp = Array.from({ length: N + 1 }, () => new Int32Array(M + 1));
+
+    for (let i = 1; i <= N; i++) {
+      for (let j = 1; j <= M; j++) {
+        if (linesA[i - 1].trim() === linesB[j - 1].trim()) {
+          dp[i][j] = dp[i - 1][j - 1] + 1;
+        } else {
+          dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+        }
+      }
+    }
+
+    let i = N, j = M;
+    const diffA = new Map();
+    const diffB = new Map();
+
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && linesA[i - 1].trim() === linesB[j - 1].trim()) {
+        i--;
+        j--;
+      } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+        diffB.set(j - 1, 'ADD');
+        j--;
+      } else if (i > 0 && (j === 0 || dp[i][j - 1] < dp[i - 1][j])) {
+        diffA.set(i - 1, 'DEL');
+        i--;
+      }
+    }
+
+    // Correlate corresponding keys as modified
+    diffA.forEach((typeA, idxA) => {
+      const lineA = linesA[idxA].trim();
+      const matchA = lineA.match(/"([^"]+)":/);
+      if (matchA) {
+        const keyA = matchA[1];
+        diffB.forEach((typeB, idxB) => {
+          const lineB = linesB[idxB].trim();
+          const matchB = lineB.match(/"([^"]+)":/);
+          if (matchB && matchB[1] === keyA) {
+            diffA.set(idxA, 'MOD');
+            diffB.set(idxB, 'MOD');
+          }
+        });
+      }
+    });
+
+    return { diffA, diffB };
+  }
+
+  function executeLineByLineDiff() {
+    const rawA = diffInputLeft.value;
+    const rawB = diffInputRight.value;
+    const linesA = rawA.split('\n');
+    const linesB = rawB.split('\n');
+
+    const { diffA, diffB } = computeLineDiff(linesA, linesB);
+
+    let countAdd = 0;
+    let countDel = 0;
+    let countMod = 0;
+
+    let gutterHtmlA = '';
+    let backdropHtmlA = '';
+    for (let i = 0; i < linesA.length; i++) {
+      const type = diffA.get(i);
+      let gutterClass = '';
+      let bgClass = '';
+
+      if (type === 'DEL') {
+        if (activeDiffFilter === 'ALL' || activeDiffFilter === 'DEL') {
+          gutterClass = 'gutter-del';
+          bgClass = 'line-deleted';
+        }
+        countDel++;
+      } else if (type === 'MOD') {
+        if (activeDiffFilter === 'ALL' || activeDiffFilter === 'MOD') {
+          gutterClass = 'gutter-mod';
+          bgClass = 'line-modified';
+        }
+        countMod++;
+      }
+
+      gutterHtmlA += `<div class="${gutterClass}">${i + 1}</div>`;
+      backdropHtmlA += `<div class="diff-line-bg ${bgClass}"></div>`;
+    }
+    diffLinesLeft.innerHTML = gutterHtmlA;
+    diffBackdropLeft.innerHTML = backdropHtmlA;
+
+    let gutterHtmlB = '';
+    let backdropHtmlB = '';
+    for (let j = 0; j < linesB.length; j++) {
+      const type = diffB.get(j);
+      let gutterClass = '';
+      let bgClass = '';
+
+      if (type === 'ADD') {
+        if (activeDiffFilter === 'ALL' || activeDiffFilter === 'ADD') {
+          gutterClass = 'gutter-add';
+          bgClass = 'line-added';
+        }
+        countAdd++;
+      } else if (type === 'MOD') {
+        if (activeDiffFilter === 'ALL' || activeDiffFilter === 'MOD') {
+          gutterClass = 'gutter-mod';
+          bgClass = 'line-modified';
+        }
+      }
+
+      gutterHtmlB += `<div class="${gutterClass}">${j + 1}</div>`;
+      backdropHtmlB += `<div class="diff-line-bg ${bgClass}"></div>`;
+    }
+    diffLinesRight.innerHTML = gutterHtmlB;
+    diffBackdropRight.innerHTML = backdropHtmlB;
+
+    filterBtnAdd.textContent = `+${countAdd} Added`;
+    filterBtnDel.textContent = `-${countDel} Removed`;
+    filterBtnMod.textContent = `~${countMod} Modified`;
+  }
+
+  // 5. Change Filters
+  function setDiffFilter(filterType) {
+    activeDiffFilter = filterType;
+    filterBtnAll.classList.toggle('active', filterType === 'ALL');
+    filterBtnAdd.classList.toggle('active', filterType === 'ADD');
+    filterBtnDel.classList.toggle('active', filterType === 'DEL');
+    filterBtnMod.classList.toggle('active', filterType === 'MOD');
+    executeLineByLineDiff();
+  }
+
+  filterBtnAll.addEventListener('click', () => setDiffFilter('ALL'));
+  filterBtnAdd.addEventListener('click', () => setDiffFilter('ADD'));
+  filterBtnDel.addEventListener('click', () => setDiffFilter('DEL'));
+  filterBtnMod.addEventListener('click', () => setDiffFilter('MOD'));
+
+  // 6. Test Data
+  const sampleOriginalJson = {
+    "clusterId": "k8s-prod-us-east-01",
+    "version": "1.28.4",
+    "region": "us-east-1",
+    "environment": "staging",
+    "autoScaling": {
+      "enabled": true,
+      "minNodes": 3,
+      "maxNodes": 12,
+      "targetCPUUtilization": 75
+    },
+    "networking": {
+      "vpcId": "vpc-0987a6b5c4d3e2f1",
+      "cidrBlock": "10.0.0.0/16",
+      "enableNatGateway": true,
+      "subnets": [
+        { "id": "subnet-01", "zone": "us-east-1a", "type": "public" },
+        { "id": "subnet-02", "zone": "us-east-1b", "type": "private" }
+      ]
+    },
+    "microservices": [
+      { "name": "auth-service", "version": "v2.1.0", "replicas": 3 },
+      { "name": "payment-gateway", "version": "v1.9.3", "replicas": 5 }
+    ]
+  };
+
+  const sampleModifiedJson = {
+    "clusterId": "k8s-prod-us-east-01",
+    "version": "1.30.2",
+    "region": "us-east-1",
+    "environment": "production",
+    "autoScaling": {
+      "enabled": true,
+      "minNodes": 5,
+      "maxNodes": 25,
+      "targetCPUUtilization": 70,
+      "cooldownPeriodSec": 300
+    },
+    "networking": {
+      "vpcId": "vpc-0987a6b5c4d3e2f1",
+      "cidrBlock": "10.0.0.0/16",
+      "enableNatGateway": true,
+      "subnets": [
+        { "id": "subnet-01", "zone": "us-east-1a", "type": "public" },
+        { "id": "subnet-03", "zone": "us-east-1c", "type": "private" }
+      ]
+    },
+    "microservices": [
+      { "name": "auth-service", "version": "v3.0.0", "replicas": 6 },
+      { "name": "payment-gateway", "version": "v2.0.0", "replicas": 8 },
+      { "name": "analytics-ingest", "version": "v1.0.0", "replicas": 4 }
+    ]
+  };
+
+  document.getElementById('btn-diff-load-sample').addEventListener('click', () => {
+    diffInputLeft.value = JSON.stringify(sampleOriginalJson, null, 2);
+    diffInputRight.value = JSON.stringify(sampleModifiedJson, null, 2);
+    executeLineByLineDiff();
+  });
+
+  document.getElementById('btn-diff-swap').addEventListener('click', () => {
+    const temp = diffInputLeft.value;
+    diffInputLeft.value = diffInputRight.value;
+    diffInputRight.value = temp;
+    executeLineByLineDiff();
+  });
+
+  document.getElementById('btn-diff-format-left').addEventListener('click', () => {
+    try {
+      diffInputLeft.value = JSON.stringify(JSON.parse(diffInputLeft.value), null, 2);
+      executeLineByLineDiff();
+    } catch {}
+  });
+
+  document.getElementById('btn-diff-format-right').addEventListener('click', () => {
+    try {
+      diffInputRight.value = JSON.stringify(JSON.parse(diffInputRight.value), null, 2);
+      executeLineByLineDiff();
+    } catch {}
+  });
+
+  document.getElementById('btn-diff-clear-left').addEventListener('click', () => {
+    diffInputLeft.value = '';
+    executeLineByLineDiff();
+  });
+
+  document.getElementById('btn-diff-clear-right').addEventListener('click', () => {
+    diffInputRight.value = '';
+    executeLineByLineDiff();
+  });
+
+  // Initialize
+  const sharedLeft = localStorage.getItem('shared_json_left');
+  diffInputLeft.value = sharedLeft ? sharedLeft : JSON.stringify(sampleOriginalJson, null, 2);
+  diffInputRight.value = JSON.stringify(sampleModifiedJson, null, 2);
+  executeLineByLineDiff();
+</script>
+</body>
+</html>
