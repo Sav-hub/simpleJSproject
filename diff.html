@@ -5,7 +5,35 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>JSON Studio - Side-by-Side Diff</title>
   <style>
+    /* =========================================
+       1. THEME DEFINITIONS (CSS VARIABLES)
+       ========================================= */
     :root {
+      /* Default: Grey Theme */
+      --bg: #1e2430;
+      --panel-bg: #282f3d;
+      --panel-header: #323b4c;
+      --border: #3f4a5f;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --editor-bg: #181d27;
+      --gutter-bg: #141820;
+      --btn-bg: #1e2430;
+      --btn-hover: rgba(255, 255, 255, 0.08);
+
+      /* In-Line Diff Highlighting */
+      --diff-add-bg: rgba(34, 197, 94, 0.18);
+      --diff-add-gutter: #22c55e;
+      --diff-del-bg: rgba(239, 68, 68, 0.18);
+      --diff-del-gutter: #ef4444;
+      --diff-mod-bg: rgba(234, 179, 8, 0.18);
+      --diff-mod-gutter: #eab308;
+    }
+
+    body.dark-theme {
+      /* Midnight / Deep Dark Theme */
       --bg: #0b0f19;
       --panel-bg: #111827;
       --panel-header: #151d30;
@@ -14,9 +42,12 @@
       --text-muted: #6b7280;
       --accent: #6366f1;
       --accent-hover: #4f46e5;
+      --editor-bg: #0d1117;
       --gutter-bg: #0d1321;
-      
-      /* In-Line Diff Colors */
+      --btn-bg: #1f2937;
+      --btn-hover: #374151;
+
+      /* In-Line Diff Highlighting */
       --diff-add-bg: rgba(34, 197, 94, 0.18);
       --diff-add-gutter: #22c55e;
       --diff-del-bg: rgba(239, 68, 68, 0.18);
@@ -34,6 +65,7 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      transition: background-color 0.2s ease, color 0.2s ease;
     }
 
     /* Top Navigation Header */
@@ -57,7 +89,11 @@
     }
     .brand span { color: var(--accent); }
     
-    .nav-tabs { display: flex; gap: 6px; }
+    .nav-tabs { 
+      display: flex; 
+      align-items: center; 
+      gap: 8px; 
+    }
     .tab-link {
       background: transparent;
       border: 1px solid transparent;
@@ -72,12 +108,33 @@
       align-items: center;
       gap: 6px;
     }
-    .tab-link:hover { color: var(--text); background: #1f2937; }
+    .tab-link:hover { color: var(--text); background: var(--btn-hover); }
     .tab-link.active {
       background: var(--panel-bg);
       color: #fff;
       border-color: var(--border);
       box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    /* Theme Switcher Button */
+    .theme-toggle-btn {
+      background: var(--panel-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+    .theme-toggle-btn:hover {
+      border-color: var(--accent);
+      color: #fff;
     }
 
     .main-view {
@@ -124,9 +181,9 @@
     }
 
     button {
-      background: #1f2937;
+      background: var(--btn-bg);
       color: var(--text);
-      border: 1px solid #374151;
+      border: 1px solid var(--border);
       padding: 4px 9px;
       border-radius: 5px;
       font-size: 12px;
@@ -139,7 +196,7 @@
       gap: 4px;
       user-select: none;
     }
-    button:hover { background: #374151; }
+    button:hover { background: var(--btn-hover); }
     button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
     button.primary:hover { background: var(--accent-hover); }
 
@@ -149,7 +206,7 @@
       display: flex;
       position: relative;
       overflow: hidden;
-      background: #0d1117;
+      background: var(--editor-bg);
     }
 
     .line-numbers {
@@ -255,6 +312,7 @@
       z-index: 2;
     }
 
+    /* Diff Highlight Rows */
     .diff-line-bg {
       height: 19.5px;
       display: block;
@@ -273,7 +331,7 @@
       border-left: 3px solid var(--diff-mod-gutter);
     }
 
-    /* Sync Scroll Button */
+    /* Sync Scroll Button & Status Indicator */
     button.sync-scroll-btn {
       font-size: 11px;
       font-weight: 600;
@@ -316,7 +374,7 @@
       opacity: 1;
       box-shadow: 0 0 0 1px currentColor;
     }
-    .filter-all { background: #1f2937; color: var(--text); border-color: #374151; }
+    .filter-all { background: var(--btn-bg); color: var(--text); border-color: var(--border); }
     .filter-add { background: var(--diff-add-bg); border-color: rgba(34,197,94,0.4); color: #4ade80; }
     .filter-del { background: var(--diff-del-bg); border-color: rgba(239,68,68,0.4); color: #f87171; }
     .filter-mod { background: var(--diff-mod-bg); border-color: rgba(234,179,8,0.4); color: #facc15; }
@@ -332,6 +390,12 @@
     <div class="nav-tabs">
       <a href="index.html" class="tab-link" id="nav-to-viewer">🛠 Viewer & Tree</a>
       <a href="diff.html" class="tab-link active">⚖️ In-Line Diff Compare</a>
+      
+      <!-- Theme Switcher Button -->
+      <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle between Grey and Dark Theme">
+        <span id="theme-icon">🌙</span>
+        <span id="theme-label">Dark Theme</span>
+      </button>
     </div>
   </header>
 
@@ -391,6 +455,37 @@
   </main>
 
 <script>
+  // ==========================================
+  // 1. THEME SYSTEM (Grey <-> Dark)
+  // ==========================================
+  const themeToggleBtn = document.getElementById('theme-toggle-btn');
+  const themeIcon = document.getElementById('theme-icon');
+  const themeLabel = document.getElementById('theme-label');
+
+  function applyTheme(themeName) {
+    if (themeName === 'dark') {
+      document.body.classList.add('dark-theme');
+      themeIcon.textContent = '☀️';
+      themeLabel.textContent = 'Grey Theme';
+    } else {
+      document.body.classList.remove('dark-theme');
+      themeIcon.textContent = '🌙';
+      themeLabel.textContent = 'Dark Theme';
+    }
+    localStorage.setItem('json_studio_theme', themeName);
+  }
+
+  themeToggleBtn.addEventListener('click', () => {
+    const isDark = document.body.classList.contains('dark-theme');
+    applyTheme(isDark ? 'grey' : 'dark');
+  });
+
+  const savedTheme = localStorage.getItem('json_studio_theme') || 'grey';
+  applyTheme(savedTheme);
+
+  // ==========================================
+  // 2. DOM & STATE INITIALIZATION
+  // ==========================================
   const diffInputLeft = document.getElementById('diff-input-left');
   const diffInputRight = document.getElementById('diff-input-right');
   const diffLinesLeft = document.getElementById('diff-lines-left');
@@ -412,12 +507,11 @@
   let isSyncingRight = false;
   let activeDiffFilter = 'ALL';
 
-  // Save current left JSON back when returning to viewer
   navToViewer.addEventListener('click', () => {
     localStorage.setItem('shared_json_left', diffInputLeft.value);
   });
 
-  // Synchronized Scrolling Logic
+  // 3. Synchronized Scrolling
   btnSyncScroll.addEventListener('click', () => {
     syncScrollEnabled = !syncScrollEnabled;
     btnSyncScroll.classList.toggle('active', syncScrollEnabled);
@@ -460,7 +554,7 @@
   });
   diffInputRight.addEventListener('input', executeLineByLineDiff);
 
-  // Line-by-Line LCS Diff Algorithm
+  // 4. LCS Line Diff Algorithm
   function computeLineDiff(linesA, linesB) {
     const N = linesA.length;
     const M = linesB.length;
@@ -493,6 +587,7 @@
       }
     }
 
+    // Correlate corresponding keys as modified
     diffA.forEach((typeA, idxA) => {
       const lineA = linesA[idxA].trim();
       const matchA = lineA.match(/"([^"]+)":/);
@@ -582,6 +677,7 @@
     filterBtnMod.textContent = `~${countMod} Modified`;
   }
 
+  // 5. Change Filters
   function setDiffFilter(filterType) {
     activeDiffFilter = filterType;
     filterBtnAll.classList.toggle('active', filterType === 'ALL');
@@ -596,6 +692,7 @@
   filterBtnDel.addEventListener('click', () => setDiffFilter('DEL'));
   filterBtnMod.addEventListener('click', () => setDiffFilter('MOD'));
 
+  // 6. Test Data
   const sampleOriginalJson = {
     "clusterId": "k8s-prod-us-east-01",
     "version": "1.28.4",
@@ -687,7 +784,7 @@
     executeLineByLineDiff();
   });
 
-  // Check if there is data shared from index.html, else load sample
+  // Initialize
   const sharedLeft = localStorage.getItem('shared_json_left');
   diffInputLeft.value = sharedLeft ? sharedLeft : JSON.stringify(sampleOriginalJson, null, 2);
   diffInputRight.value = JSON.stringify(sampleModifiedJson, null, 2);

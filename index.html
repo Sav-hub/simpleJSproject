@@ -4,9 +4,38 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>JSON Studio - Viewer & Formatter</title>
-  <title>JSON Tree Viewer & Formatter</title>
   <style>
+    /* =========================================
+       1. THEME DEFINITIONS (CSS VARIABLES)
+       ========================================= */
     :root {
+      /* Default: Grey Theme */
+      --bg: #1e2430;
+      --panel-bg: #282f3d;
+      --panel-header: #323b4c;
+      --border: #3f4a5f;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --editor-bg: #181d27;
+      --gutter-bg: #141820;
+      --key-color: #60a5fa;
+      --str-color: #34d399;
+      --num-color: #fb923c;
+      --bool-color: #c084fc;
+      --null-color: #f87171;
+      --error-bg: rgba(239, 68, 68, 0.15);
+      --error-border: rgba(239, 68, 68, 0.35);
+      --error-text: #fca5a5;
+      --hl-bg: #fef08a;
+      --hl-text: #0f172a;
+      --hl-active-bg: #facc15;
+      --hl-active-ring: #eab308;
+    }
+
+    body.dark-theme {
+      /* Midnight / Deep Dark Theme */
       --bg: #0b0f19;
       --panel-bg: #111827;
       --panel-header: #151d30;
@@ -15,28 +44,16 @@
       --text-muted: #6b7280;
       --accent: #6366f1;
       --accent-hover: #4f46e5;
+      --editor-bg: #0d1117;
+      --gutter-bg: #0d1321;
       --key-color: #38bdf8;
       --str-color: #4ade80;
       --num-color: #fb923c;
       --bool-color: #c084fc;
       --null-color: #f43f5e;
-      --gutter-bg: #0d1321;
       --error-bg: rgba(239, 68, 68, 0.1);
       --error-border: rgba(239, 68, 68, 0.3);
       --error-text: #f87171;
-      --hl-bg: #fef08a;
-      --hl-text: #0f172a;
-      --hl-active-bg: #facc15;
-      --hl-active-ring: #eab308;
-      --error-bg: rgba(239, 68, 68, 0.1);
-      --error-border: rgba(239, 68, 68, 0.3);
-      --error-text: #f87171;
-      
-      /* Tree Highlight Colors */
-      --hl-bg: #fef08a;
-      --hl-text: #0f172a;
-      --hl-active-bg: #facc15;
-      --hl-active-ring: #eab308;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -48,6 +65,7 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      transition: background-color 0.2s ease, color 0.2s ease;
     }
 
     /* Top Navigation Bar */
@@ -71,7 +89,11 @@
     }
     .brand span { color: var(--accent); }
     
-    .nav-tabs { display: flex; gap: 6px; }
+    .nav-tabs { 
+      display: flex; 
+      align-items: center; 
+      gap: 8px; 
+    }
     .tab-link {
       background: transparent;
       border: 1px solid transparent;
@@ -86,12 +108,33 @@
       align-items: center;
       gap: 6px;
     }
-    .tab-link:hover { color: var(--text); background: #1f2937; }
+    .tab-link:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
     .tab-link.active {
       background: var(--panel-bg);
       color: #fff;
       border-color: var(--border);
       box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    /* Theme Switcher Button */
+    .theme-toggle-btn {
+      background: var(--panel-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+    .theme-toggle-btn:hover {
+      border-color: var(--accent);
+      color: #fff;
     }
 
     .main-view {
@@ -106,9 +149,6 @@
       grid-template-columns: 1fr 1fr;
       gap: 14px;
       height: 100%;
-      transition: grid-template-columns 0.25s ease;
-      gap: 16px;
-      height: calc(100vh - 32px);
       transition: grid-template-columns 0.25s ease;
     }
     .app-container.single-pane { grid-template-columns: 1fr; }
@@ -129,12 +169,9 @@
       justify-content: space-between;
       padding: 8px 12px;
       background: var(--panel-header);
-      padding: 8px 14px;
-      background: #151d30;
       border-bottom: 1px solid var(--border);
       font-size: 13px;
       font-weight: 600;
-      gap: 8px;
       gap: 8px;
     }
 
@@ -143,15 +180,12 @@
       align-items: center;
       gap: 6px;
       flex-wrap: wrap;
-      gap: 6px;
-      flex-wrap: wrap;
     }
 
     button {
-      background: #1f2937;
+      background: var(--bg);
       color: var(--text);
-      border: 1px solid #374151;
-      padding: 4px 9px;
+      border: 1px solid var(--border);
       padding: 4px 9px;
       border-radius: 5px;
       font-size: 12px;
@@ -163,81 +197,17 @@
       justify-content: center;
       gap: 4px;
       user-select: none;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
     }
-    button:hover { background: #374151; }
+    button:hover { background: rgba(255, 255, 255, 0.08); }
     button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
     button.primary:hover { background: var(--accent-hover); }
-
-    /* Independent Search Bars */
-    .search-box {
-      display: flex;
-      align-items: center;
-      background: #0d1321;
-      border: 1px solid #374151;
-      border-radius: 5px;
-      padding: 2px 5px;
-      gap: 3px;
-    }
-    .search-box:focus-within {
-      border-color: var(--accent);
-    }
-    .search-input {
-      background: transparent;
-      border: none;
-      color: var(--text);
-      font-size: 12px;
-      outline: none;
-      width: 110px;
-      padding: 2px 4px;
-    }
-    .search-count {
-      font-size: 11px;
-      color: var(--text-muted);
-      min-width: 30px;
-      text-align: center;
-      user-select: none;
-      font-family: ui-monospace, monospace;
-    }
-    .search-nav-btn {
-      background: transparent;
-      border: none;
-      color: var(--text-muted);
-      padding: 2px 3px;
-      font-size: 9px;
-      border-radius: 3px;
-      cursor: pointer;
-    }
-    .search-nav-btn:hover {
-      background: #1f2937;
-      color: var(--text);
-    }
-
-    /* Close Button for Tree View */
-    button.close-btn {
-      background: transparent;
-      border: 1px solid transparent;
-      color: var(--text-muted);
-      font-size: 14px;
-      padding: 3px 6px;
-      border-radius: 4px;
-      line-height: 1;
-    }
-    button.close-btn:hover {
-      color: #f87171;
-      background: rgba(239, 68, 68, 0.15);
-      border-color: rgba(239, 68, 68, 0.3);
-    }
 
     /* Search Toolbar */
     .search-box {
       display: flex;
       align-items: center;
-      background: #0d1321;
-      border: 1px solid #374151;
+      background: var(--gutter-bg);
+      border: 1px solid var(--border);
       border-radius: 5px;
       padding: 2px 5px;
       gap: 3px;
@@ -269,15 +239,28 @@
       border-radius: 3px;
       cursor: pointer;
     }
-    .search-nav-btn:hover { background: #1f2937; color: var(--text); }
+    .search-nav-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--text); }
+
+    /* Close Button for Tree View */
+    button.close-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      font-size: 14px;
+      padding: 3px 6px;
+      border-radius: 4px;
+      line-height: 1;
+    }
+    button.close-btn:hover {
+      color: #f87171;
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.3);
+    }
 
     /* Switch Slider */
     .switch-container {
       display: flex;
       align-items: center;
-      gap: 6px;
-      margin-left: 2px;
-      padding-left: 6px;
       gap: 6px;
       margin-left: 2px;
       padding-left: 6px;
@@ -289,16 +272,13 @@
       display: inline-block;
       width: 34px;
       height: 18px;
-      width: 34px;
-      height: 18px;
     }
     .switch input { opacity: 0; width: 0; height: 0; }
     .slider {
       position: absolute;
       cursor: pointer;
       top: 0; left: 0; right: 0; bottom: 0;
-      background-color: #374151;
-      transition: .25s;
+      background-color: var(--border);
       transition: .25s;
       border-radius: 20px;
     }
@@ -307,32 +287,25 @@
       content: "";
       height: 12px;
       width: 12px;
-      height: 12px;
-      width: 12px;
       left: 3px;
       bottom: 3px;
       background-color: white;
-      transition: .25s;
       transition: .25s;
       border-radius: 50%;
     }
     input:checked + .slider { background-color: var(--accent); }
     input:checked + .slider:before { transform: translateX(16px); }
-    input:checked + .slider:before { transform: translateX(16px); }
 
-    /* Editor Layout with Precise Metric Alignment */
     /* Editor Layout */
     .editor-wrapper {
       flex: 1;
       display: flex;
       position: relative;
       overflow: hidden;
-      background: #0d1117;
+      background: var(--editor-bg);
     }
     .line-numbers {
       width: 50px;
-      padding: 14px 6px 14px 0;
-      width: 48px;
       padding: 14px 6px 14px 0;
       text-align: right;
       background: var(--gutter-bg);
@@ -344,36 +317,17 @@
       border-right: 1px solid var(--border);
       overflow: hidden;
       z-index: 3;
-      z-index: 3;
     }
     .line-numbers div {
       height: 19.5px;
       padding-right: 6px;
       transition: all 0.15s;
     }
-
     .line-numbers div.error-line {
       background: #ef4444;
       color: #ffffff;
       font-weight: 700;
       border-radius: 3px 0 0 3px;
-      position: relative;
-    }
-    .line-numbers div.error-line::after {
-      content: "▶";
-      position: absolute;
-      right: -3px;
-      top: 0;
-      font-size: 9px;
-      color: #ef4444;
-    }
-
-    .textarea-container {
-    .line-numbers div { height: 19.5px; padding-right: 6px; }
-    .line-numbers div.error-line {
-      background: #ef4444;
-      color: #ffffff;
-      font-weight: 700;
       position: relative;
     }
     .line-numbers div.error-line::after {
@@ -392,11 +346,6 @@
     }
 
     #raw-backdrop, textarea {
-      position: relative;
-      overflow: hidden;
-    }
-
-    .backdrop-layer, textarea {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 13px;
       line-height: 1.5;
@@ -424,30 +373,6 @@
       top: 0; left: 0; width: 100%; height: 100%;
       background: transparent;
       color: var(--text);
-      padding: 14px;
-      margin: 0;
-      border: 0;
-      box-sizing: border-box;
-      white-space: pre;
-      letter-spacing: 0;
-      tab-size: 2;
-    }
-
-    .backdrop-layer {
-      position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
-      overflow: hidden;
-      pointer-events: none;
-      color: transparent;
-      z-index: 1;
-      background: transparent;
-    }
-
-    textarea {
-      position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: transparent;
-      color: var(--text);
       resize: none;
       outline: none;
       overflow-wrap: normal;
@@ -457,7 +382,7 @@
 
     /* Diagnostics Section */
     .editor-footer {
-      background: #151d30;
+      background: var(--panel-header);
       border-top: 1px solid var(--border);
       padding: 8px 16px;
       font-size: 12px;
@@ -486,48 +411,11 @@
       font-weight: 700;
       text-transform: uppercase;
     }
-    .error-line-badge { color: #fca5a5; font-weight: 600; font-size: 12px; }
+    .error-line-badge { color: var(--error-text); font-weight: 600; font-size: 12px; }
     .error-msg { color: var(--text); font-size: 12px; margin-left: 2px; }
-    .error-hint { color: #fca5a5; font-size: 11px; margin-left: 2px; }
-      z-index: 2;
-    }
-
-    /* Diagnostics Banner */
-    .editor-footer {
-      background: var(--panel-header);
-      border-top: 1px solid var(--border);
-      padding: 8px 14px;
-      font-size: 12px;
-      max-height: 150px;
-      overflow-y: auto;
-    }
-    .editor-footer.has-error {
-      background: rgba(239, 68, 68, 0.1);
-      border-color: rgba(239, 68, 68, 0.3);
-    }
-    .error-item {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      padding: 4px 0;
-      border-bottom: 1px solid rgba(239, 68, 68, 0.15);
-    }
-    .error-item:last-child { border-bottom: none; }
-    .error-title-row { display: flex; align-items: center; gap: 8px; }
-    .error-tag {
-      background: #ef4444;
-      color: #fff;
-      font-size: 10px;
-      padding: 2px 5px;
-      border-radius: 3px;
-      font-weight: 700;
-    }
-    .error-line-badge { color: #fca5a5; font-weight: 600; font-size: 12px; }
-    .error-msg { color: var(--text); font-size: 12px; }
-    .error-hint { color: #fca5a5; font-size: 11px; }
+    .error-hint { color: var(--error-text); font-size: 11px; margin-left: 2px; }
 
     /* Tree View Output */
-    #tree-pane { display: none; }
     #tree-pane { display: none; }
     #viewer-output {
       flex: 1;
@@ -538,8 +426,6 @@
       line-height: 1.5;
     }
 
-    .tree-item { margin-left: 18px; position: relative; }
-    .tree-row { display: flex; align-items: center; gap: 4px; padding: 2px 0; }
     .tree-item { margin-left: 18px; position: relative; }
     .tree-row { display: flex; align-items: center; gap: 4px; padding: 2px 0; }
     .caret-btn {
@@ -554,18 +440,16 @@
       font-size: 10px;
       border-radius: 3px;
     }
-    .caret-btn:hover { color: #fff; background: #2d3748; }
+    .caret-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
 
-    .collapsed > .tree-row > .caret-btn { transform: rotate(-90deg); }
-    .collapsed > .tree-children { display: none; }
-    .collapsed > .tree-row .badge-summary { display: inline-block; }
     .collapsed > .tree-row > .caret-btn { transform: rotate(-90deg); }
     .collapsed > .tree-children { display: none; }
     .collapsed > .tree-row .badge-summary { display: inline-block; }
 
     .badge-summary {
       display: none;
-      background: #1f2937;
+      background: var(--bg);
+      border: 1px solid var(--border);
       color: var(--text-muted);
       font-size: 11px;
       padding: 1px 6px;
@@ -582,7 +466,7 @@
     .null { color: var(--null-color); font-weight: bold; }
     .comma { color: #94a3b8; }
 
-    /* Fix: Raw Backdrop Highlights (Transparent Text to Avoid Overlap) */
+    /* Highlights */
     #raw-backdrop mark.highlight {
       background-color: rgba(250, 204, 21, 0.3);
       color: transparent !important;
@@ -594,7 +478,6 @@
       box-shadow: 0 0 0 1px #eab308, 0 0 6px rgba(250, 204, 21, 0.8);
     }
 
-    /* Tree View Highlights */
     #viewer-output mark.highlight {
       background-color: var(--hl-bg);
       color: var(--hl-text);
@@ -606,109 +489,11 @@
       background-color: var(--hl-active-bg);
       outline: 2px solid var(--hl-active-ring);
       box-shadow: 0 0 6px rgba(250, 204, 21, 0.7);
-    .backdrop-layer mark.highlight {
-      background-color: rgba(250, 204, 21, 0.3);
-      color: transparent !important;
-      border-radius: 2px;
-      box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.4);
-    }
-    .backdrop-layer mark.highlight.active-match {
-      background-color: rgba(250, 204, 21, 0.65);
-      box-shadow: 0 0 0 1px #eab308;
-    }
-    #viewer-output mark.highlight {
-      background-color: var(--hl-bg);
-      color: var(--hl-text);
-      padding: 1px 3px;
-      border-radius: 2px;
-      font-weight: 600;
-    }
-    #viewer-output mark.highlight.active-match {
-      background-color: var(--hl-active-bg);
-      outline: 2px solid var(--hl-active-ring);
     }
   </style>
 </head>
 <body>
 
-<div class="app-container single-pane" id="app-container">
-  <!-- Raw JSON Pane -->
-  <div class="pane">
-    <div class="header">
-      <span>Raw JSON</span>
-      <div class="actions">
-        <!-- 1. Raw Editor Search Bar -->
-        <div class="search-box">
-          <input type="text" id="raw-search-input" class="search-input" placeholder="Search text..." />
-          <span id="raw-search-count" class="search-count">0/0</span>
-          <button id="raw-search-prev" class="search-nav-btn" title="Previous match (Shift+Enter)">▲</button>
-          <button id="raw-search-next" class="search-nav-btn" title="Next match (Enter)">▼</button>
-        </div>
-
-        <button id="btn-format" class="primary">Format</button>
-        <button id="btn-minify">Minify</button>
-        <button id="btn-clear">Clear</button>
-        
-        <div class="switch-container">
-          <label class="switch">
-            <input type="checkbox" id="tree-toggle" />
-            <span class="slider"></span>
-          </label>
-          <span class="switch-label">Tree View</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="editor-wrapper">
-      <div class="line-numbers" id="line-numbers"></div>
-      <div class="textarea-container">
-        <div id="raw-backdrop"></div>
-        <textarea id="json-input" spellcheck="false" placeholder="Paste or type JSON here...">
-{
-  "application": "JSON Viewer Suite",
-  "version": 3,
-  "isActive": true,
-  "license": null,
-  "settings": {
-    "theme": "dark",
-    "fontSize": 13,
-    "features": {
-      "liveReload": true,
-      "codeFolding": true,
-      "nestedDepthLimit": 10
-    }
-  },
-  "modules": [
-    {
-      "id": 101,
-      "name": "Parser Engine",
-      "stable": true,
-      "module": [
-        {
-          "id": 101,
-          "name": "Parser Engine",
-          "stable": true
-        },
-        {
-          "id": 102,
-          "name": "Tree Visualizer",
-          "stable": true
-        }
-      ]
-    },
-    {
-      "id": 102,
-      "name": "Tree Visualizer",
-      "stable": true
-    }
-  ]
-}</textarea>
-      </div>
-    </div>
-    <div class="editor-footer" id="editor-footer">
-      <span style="color: var(--text-muted);">Status: Ready</span>
-    </div>
-  </div>
   <!-- Top Navigation Header -->
   <header class="top-nav">
     <div class="brand">
@@ -717,17 +502,25 @@
     <div class="nav-tabs">
       <a href="index.html" class="tab-link active">🛠 Viewer & Tree</a>
       <a href="diff.html" class="tab-link" id="nav-to-diff">⚖️ In-Line Diff Compare</a>
+      
+      <!-- Theme Switcher Button -->
+      <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle between Grey and Dark Theme">
+        <span id="theme-icon">🌙</span>
+        <span id="theme-label">Dark Theme</span>
+      </button>
     </div>
   </header>
 
   <!-- Main View -->
   <main class="main-view">
     <div class="app-container single-pane" id="app-container">
+      
       <!-- Raw JSON Pane -->
       <div class="pane">
         <div class="header">
           <span>Raw JSON Editor</span>
           <div class="actions">
+            <!-- Raw Editor Search Bar -->
             <div class="search-box">
               <input type="text" id="raw-search-input" class="search-input" placeholder="Search text..." />
               <span id="raw-search-count" class="search-count">0/0</span>
@@ -752,7 +545,7 @@
         <div class="editor-wrapper">
           <div class="line-numbers" id="line-numbers"></div>
           <div class="textarea-container">
-            <div id="raw-backdrop" class="backdrop-layer"></div>
+            <div id="raw-backdrop"></div>
             <textarea id="json-input" spellcheck="false" placeholder="Paste or type JSON here..."></textarea>
           </div>
         </div>
@@ -761,53 +554,65 @@
         </div>
       </div>
 
-  <!-- Tree View Output Pane -->
-  <div class="pane" id="tree-pane">
-    <div class="header">
-      <span>Tree Hierarchy</span>
-      <div class="actions">
-        <!-- 2. Tree Hierarchy Search Bar -->
-        <div class="search-box">
-          <input type="text" id="tree-search-input" class="search-input" placeholder="Search tree..." />
-          <span id="tree-search-count" class="search-count">0/0</span>
-          <button id="tree-search-prev" class="search-nav-btn" title="Previous match (Shift+Enter)">▲</button>
-          <button id="tree-search-next" class="search-nav-btn" title="Next match (Enter)">▼</button>
-        </div>
-
-        <button id="btn-expand-all">Expand All</button>
-        <button id="btn-collapse-all">Collapse All</button>
-        <button id="btn-close-tree" class="close-btn" title="Close Tree View">✕</button>
-      </div>
-    </div>
-    <div id="viewer-output"></div>
-  </div>
-</div>
-      <!-- Tree Hierarchy Output Pane -->
+      <!-- Tree View Output Pane -->
       <div class="pane" id="tree-pane">
         <div class="header">
           <span>Tree Hierarchy</span>
           <div class="actions">
+            <!-- Tree Hierarchy Search Bar -->
             <div class="search-box">
               <input type="text" id="tree-search-input" class="search-input" placeholder="Search tree..." />
               <span id="tree-search-count" class="search-count">0/0</span>
-              <button id="tree-search-prev" class="search-nav-btn" title="Previous">▲</button>
-              <button id="tree-search-next" class="search-nav-btn" title="Next">▼</button>
+              <button id="tree-search-prev" class="search-nav-btn" title="Previous match (Shift+Enter)">▲</button>
+              <button id="tree-search-next" class="search-nav-btn" title="Next match (Enter)">▼</button>
             </div>
 
             <button id="btn-expand-all">Expand All</button>
             <button id="btn-collapse-all">Collapse All</button>
-            <button id="btn-close-tree" style="background:transparent; border:none; color:var(--text-muted); font-size:14px; cursor:pointer;" title="Close">✕</button>
+            <button id="btn-close-tree" class="close-btn" title="Close Tree View">✕</button>
           </div>
         </div>
         <div id="viewer-output"></div>
       </div>
+
     </div>
   </main>
 
 <script>
+  // ==========================================
+  // 1. THEME SWITCHING SYSTEM (Grey <-> Dark)
+  // ==========================================
+  const themeToggleBtn = document.getElementById('theme-toggle-btn');
+  const themeIcon = document.getElementById('theme-icon');
+  const themeLabel = document.getElementById('theme-label');
+
+  function applyTheme(themeName) {
+    if (themeName === 'dark') {
+      document.body.classList.add('dark-theme');
+      themeIcon.textContent = '☀️';
+      themeLabel.textContent = 'Grey Theme';
+    } else {
+      document.body.classList.remove('dark-theme');
+      themeIcon.textContent = '🌙';
+      themeLabel.textContent = 'Dark Theme';
+    }
+    localStorage.setItem('json_studio_theme', themeName);
+  }
+
+  themeToggleBtn.addEventListener('click', () => {
+    const isDark = document.body.classList.contains('dark-theme');
+    applyTheme(isDark ? 'grey' : 'dark');
+  });
+
+  // Load saved theme preference (default: grey)
+  const savedTheme = localStorage.getItem('json_studio_theme') || 'grey';
+  applyTheme(savedTheme);
+
+  // ==========================================
+  // 2. DOM & STATE INITIALIZATION
+  // ==========================================
   const jsonInput = document.getElementById('json-input');
   const lineNumbers = document.getElementById('line-numbers');
-  const rawBackdrop = document.getElementById('raw-backdrop');
   const rawBackdrop = document.getElementById('raw-backdrop');
   const treePane = document.getElementById('tree-pane');
   const appContainer = document.getElementById('app-container');
@@ -815,6 +620,7 @@
   const viewerOutput = document.getElementById('viewer-output');
   const editorFooter = document.getElementById('editor-footer');
   const btnCloseTree = document.getElementById('btn-close-tree');
+  const navToDiff = document.getElementById('nav-to-diff');
 
   // Search 1: Raw JSON Editor
   const rawSearchInput = document.getElementById('raw-search-input');
@@ -834,38 +640,18 @@
 
   let errorLinesSet = new Set();
 
-  // 1. Line Numbers with Multi-Error Highlighting
-  const editorFooter = document.getElementById('editor-footer');
-  const btnCloseTree = document.getElementById('btn-close-tree');
-  const navToDiff = document.getElementById('nav-to-diff');
-
-  const rawSearchInput = document.getElementById('raw-search-input');
-  const rawSearchCount = document.getElementById('raw-search-count');
-  const rawSearchPrev = document.getElementById('raw-search-prev');
-  const rawSearchNext = document.getElementById('raw-search-next');
-  let rawSearchIndices = [];
-  let currentRawMatchIndex = -1;
-
-  const treeSearchInput = document.getElementById('tree-search-input');
-  const treeSearchCount = document.getElementById('tree-search-count');
-  const treeSearchPrev = document.getElementById('tree-search-prev');
-  const treeSearchNext = document.getElementById('tree-search-next');
-  let treeMatches = [];
-  let currentTreeMatchIndex = -1;
-
-  let errorLinesSet = new Set();
-
   // State Persistence across Multi-Page Navigation
-  navToDiff.addEventListener('click', () => {
-    localStorage.setItem('shared_json_left', jsonInput.value);
-  });
+  if (navToDiff) {
+    navToDiff.addEventListener('click', () => {
+      localStorage.setItem('shared_json_left', jsonInput.value);
+    });
+  }
 
+  // 3. Line Numbers Generation
   function updateLineNumbers() {
     const lines = jsonInput.value.split('\n').length;
     let html = '';
     for (let i = 1; i <= lines; i++) {
-      const isErr = errorLinesSet.has(i);
-      html += `<div class="${isErr ? 'error-line' : ''}" data-line="${i}">${i}</div>`;
       const isErr = errorLinesSet.has(i);
       html += `<div class="${isErr ? 'error-line' : ''}" data-line="${i}">${i}</div>`;
     }
@@ -875,8 +661,6 @@
   jsonInput.addEventListener('input', () => {
     validateAndProcess();
     applyRawSearch();
-    validateAndProcess();
-    applyRawSearch();
     localStorage.setItem('shared_json_left', jsonInput.value);
   });
 
@@ -884,21 +668,14 @@
     lineNumbers.scrollTop = jsonInput.scrollTop;
     rawBackdrop.scrollTop = jsonInput.scrollTop;
     rawBackdrop.scrollLeft = jsonInput.scrollLeft;
-    rawBackdrop.scrollTop = jsonInput.scrollTop;
-    rawBackdrop.scrollLeft = jsonInput.scrollLeft;
   });
 
-  // 2. Tree View Visibility
-  function setTreeViewVisibility(show) {
-    treeToggle.checked = show;
-    if (show) {
+  // 4. Tree View Visibility Toggle
   function setTreeViewVisibility(show) {
     treeToggle.checked = show;
     if (show) {
       treePane.style.display = 'flex';
       appContainer.classList.remove('single-pane');
-      validateAndProcess();
-      applyTreeSearch();
       validateAndProcess();
       applyTreeSearch();
     } else {
@@ -910,7 +687,7 @@
   treeToggle.addEventListener('change', (e) => setTreeViewVisibility(e.target.checked));
   btnCloseTree.addEventListener('click', () => setTreeViewVisibility(false));
 
-  // 3. Multi-Error JSON Scanner
+  // 5. Multi-Error JSON Scanner
   function scanAllErrors(raw) {
     const errors = [];
     const lines = raw.split('\n');
@@ -1069,7 +846,7 @@
     return unique.sort((a, b) => a.line - b.line);
   }
 
-  // 4. Validation Pipeline
+  // 6. Validation Pipeline
   function validateAndProcess() {
     const raw = jsonInput.value;
 
@@ -1081,127 +858,6 @@
       if (treeToggle.checked) {
         viewerOutput.innerHTML = '<span style="color: var(--text-muted);">No JSON data to display.</span>';
       }
-  }
-
-  treeToggle.addEventListener('change', (e) => setTreeViewVisibility(e.target.checked));
-  btnCloseTree.addEventListener('click', () => setTreeViewVisibility(false));
-
-  function scanAllErrors(raw) {
-    const errors = [];
-    const lines = raw.split('\n');
-    const stack = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const lineNum = i + 1;
-      const originalLine = lines[i];
-      const trimmed = originalLine.trim();
-      if (!trimmed) continue;
-
-      let quoteCount = 0;
-      for (let c = 0; c < originalLine.length; c++) {
-        if (originalLine[c] === '"' && (c === 0 || originalLine[c - 1] !== '\\')) quoteCount++;
-      }
-
-      if (quoteCount % 2 !== 0) {
-        if (/"[a-zA-Z0-9_-]+:/.test(originalLine)) {
-          errors.push({ line: lineNum, msg: `Unclosed string & misplaced colon in key: <code>${escapeHtml(trimmed)}</code>`, hint: `Ensure key is quoted before colon: <code>"id": 101</code>.` });
-        } else {
-          errors.push({ line: lineNum, msg: `Unclosed string quote.`, hint: `Make sure opening quotes have matching closing quotes.` });
-        }
-      }
-
-      if (/"[a-zA-Z0-9_-]+:"\s*[^,\s]/.test(originalLine)) {
-        errors.push({ line: lineNum, msg: `Colon inside string quotes.`, hint: `Move the colon outside: change <code>"key:"</code> to <code>"key":</code>.` });
-      }
-
-      if (/'[^']*'/.test(originalLine) && !/"/.test(originalLine)) {
-        errors.push({ line: lineNum, msg: `Single quotes used.`, hint: `JSON requires double quotes <code>"</code>.` });
-      }
-
-      const endsWithValue = /(".*"|\d+|true|false|null|\]|\})$/.test(trimmed);
-      if (endsWithValue) {
-        for (let j = i + 1; j < lines.length; j++) {
-          const nextTrimmed = lines[j].trim();
-          if (!nextTrimmed) continue;
-          if (/^(".*"|{|\[)/.test(nextTrimmed) && !nextTrimmed.startsWith('}') && !nextTrimmed.startsWith(']')) {
-            errors.push({ line: lineNum, msg: `Missing comma at line end.`, hint: `Add a comma <code>,</code> after <code>${escapeHtml(trimmed)}</code>.` });
-          }
-          break;
-        }
-      }
-
-      if (trimmed.endsWith(',') && i + 1 < lines.length) {
-        for (let j = i + 1; j < lines.length; j++) {
-          const nextTrimmed = lines[j].trim();
-          if (!nextTrimmed) continue;
-          if (nextTrimmed.startsWith('}') || nextTrimmed.startsWith(']')) {
-            errors.push({ line: lineNum, msg: `Trailing comma before closing bracket <code>${nextTrimmed[0]}</code>.`, hint: `Remove the trailing comma.` });
-          }
-          break;
-        }
-      }
-
-      let inString = false;
-      for (let c = 0; c < originalLine.length; c++) {
-        const char = originalLine[c];
-        if (char === '"' && (c === 0 || originalLine[c - 1] !== '\\')) inString = !inString;
-        if (!inString) {
-          if (char === '{' || char === '[') {
-            stack.push({ char, line: lineNum });
-          } else if (char === '}' || char === ']') {
-            if (stack.length === 0) {
-              errors.push({ line: lineNum, msg: `Unmatched closing bracket <code>${char}</code>.`, hint: `No matching opening bracket found.` });
-            } else {
-              const last = stack.pop();
-              if ((char === '}' && last.char !== '{') || (char === ']' && last.char !== '[')) {
-                errors.push({ line: lineNum, msg: `Mismatched bracket: closed <code>${char}</code> but opened <code>${last.char}</code> on line ${last.line}.`, hint: `Ensure matching brackets.` });
-              }
-            }
-          }
-        }
-      }
-    }
-
-    while (stack.length > 0) {
-      const unclosed = stack.pop();
-      errors.push({ line: unclosed.line, msg: `Unclosed bracket <code>${unclosed.char}</code>.`, hint: `Missing closing bracket <code>${unclosed.char === '{' ? '}' : ']'}</code>.` });
-    }
-
-    if (errors.length === 0) {
-      try {
-        JSON.parse(raw);
-      } catch (err) {
-        let line = 1;
-        const lineColMatch = err.message.match(/line (\d+)/i);
-        if (lineColMatch) {
-          line = parseInt(lineColMatch[1], 10);
-        } else {
-          const posMatch = err.message.match(/position (\d+)/i);
-          if (posMatch) {
-            line = raw.slice(0, parseInt(posMatch[1], 10)).split('\n').length;
-          }
-        }
-        errors.push({ line, msg: escapeHtml(err.message), hint: `Please check syntax on or around this line.` });
-      }
-    }
-
-    const unique = [];
-    const seen = new Set();
-    for (const item of errors) {
-      const key = `${item.line}-${item.msg}`;
-      if (!seen.has(key)) { seen.add(key); unique.push(item); }
-    }
-    return unique.sort((a, b) => a.line - b.line);
-  }
-
-  function validateAndProcess() {
-    const raw = jsonInput.value;
-    if (!raw.trim()) {
-      errorLinesSet.clear();
-      updateLineNumbers();
-      editorFooter.className = 'editor-footer';
-      editorFooter.innerHTML = '<span style="color: var(--text-muted);">Status: Ready (Empty document)</span>';
-      if (treeToggle.checked) viewerOutput.innerHTML = '<span style="color: var(--text-muted);">No JSON to display.</span>';
       return;
     }
 
@@ -1219,7 +875,7 @@
       updateLineNumbers();
 
       editorFooter.className = 'editor-footer';
-      editorFooter.innerHTML = '<span style="color: #4ade80; font-weight: 600;">✓ Valid JSON (0 errors)</span>';
+      editorFooter.innerHTML = '<span style="color: #34d399; font-weight: 600;">✓ Valid JSON (0 errors)</span>';
 
       if (treeToggle.checked) {
         viewerOutput.innerHTML = '';
@@ -1251,7 +907,7 @@
 
       if (treeToggle.checked) {
         viewerOutput.innerHTML = `
-          <div style="color: #f87171; background: rgba(239,68,68,0.1); padding: 14px; border-radius: 6px; border: 1px solid rgba(239,68,68,0.3);">
+          <div style="color: #f87171; background: var(--error-bg); padding: 14px; border-radius: 6px; border: 1px solid var(--error-border);">
             <strong style="text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px;">Invalid JSON (${detectedErrors.length} Errors)</strong>
             <p style="margin-top: 6px; font-size: 12px;">Fix the highlighted errors in the raw JSON editor to enable tree rendering.</p>
           </div>
@@ -1260,52 +916,7 @@
     }
   }
 
-  // 5. Tree Node Constructor
-    let isNativeValid = false;
-    let parsedData = null;
-    try {
-      parsedData = JSON.parse(raw);
-      isNativeValid = true;
-    } catch { isNativeValid = false; }
-
-    if (isNativeValid) {
-      errorLinesSet.clear();
-      updateLineNumbers();
-      editorFooter.className = 'editor-footer';
-      editorFooter.innerHTML = '<span style="color: #4ade80; font-weight: 600;">✓ Valid JSON (0 errors)</span>';
-
-      if (treeToggle.checked) {
-        viewerOutput.innerHTML = '';
-        viewerOutput.appendChild(buildTreeNode(parsedData, null, true));
-        applyTreeSearch();
-      }
-    } else {
-      const detectedErrors = scanAllErrors(raw);
-      errorLinesSet = new Set(detectedErrors.map(e => e.line));
-      updateLineNumbers();
-
-      editorFooter.className = 'editor-footer has-error';
-      let errHtml = `<div style="font-weight:700; color:#f87171; margin-bottom:6px;">✕ ${detectedErrors.length} Syntax Error${detectedErrors.length > 1 ? 's' : ''} Detected:</div>`;
-      detectedErrors.forEach((err, idx) => {
-        errHtml += `
-          <div class="error-item">
-            <div class="error-title-row">
-              <span class="error-tag">Error ${idx + 1}</span>
-              <span class="error-line-badge">Line ${err.line}</span>
-              <span class="error-msg">${err.msg}</span>
-            </div>
-            <div class="error-hint"><strong>Fix:</strong> ${err.hint}</div>
-          </div>
-        `;
-      });
-      editorFooter.innerHTML = errHtml;
-
-      if (treeToggle.checked) {
-        viewerOutput.innerHTML = `<div style="color:#f87171; background:rgba(239,68,68,0.1); padding:14px; border-radius:6px; border:1px solid rgba(239,68,68,0.3);">Fix syntax errors in editor to view tree.</div>`;
-      }
-    }
-  }
-
+  // 7. Tree Node Constructor
   function buildTreeNode(val, key = null, isLast = true) {
     const isArray = Array.isArray(val);
     const isObject = val !== null && typeof val === 'object';
@@ -1329,7 +940,6 @@
       if (key !== null) {
         keyPrefix = `<span class="key" data-search-target="true">"${escapeHtml(key)}"</span>: `;
       }
-      if (key !== null) keyPrefix = `<span class="key" data-search-target="true">"${escapeHtml(key)}"</span>: `;
 
       row.innerHTML = `${keyPrefix}<span class="bracket">${openBracket}</span>`;
       row.prepend(caret);
@@ -1339,8 +949,6 @@
       summaryBadge.textContent = `${count} ${isArray ? 'items' : 'keys'} ${closeBracket}`;
       row.appendChild(summaryBadge);
 
-      const toggleCollapse = (e) => {
-        e.stopPropagation();
       const toggleCollapse = (e) => {
         e.stopPropagation();
         container.classList.toggle('collapsed');
@@ -1377,16 +985,11 @@
       } else if (val === null) {
         formattedVal = `<span class="null" data-search-target="true">null</span>`;
       }
-      if (typeof val === 'string') formattedVal = `<span class="str" data-search-target="true">"${escapeHtml(val)}"</span>`;
-      else if (typeof val === 'number') formattedVal = `<span class="num" data-search-target="true">${val}</span>`;
-      else if (typeof val === 'boolean') formattedVal = `<span class="bool" data-search-target="true">${val}</span>`;
-      else if (val === null) formattedVal = `<span class="null" data-search-target="true">null</span>`;
 
       let keyPrefix = '';
       if (key !== null) {
         keyPrefix = `<span class="key" data-search-target="true">"${escapeHtml(key)}"</span>: `;
       }
-      if (key !== null) keyPrefix = `<span class="key" data-search-target="true">"${escapeHtml(key)}"</span>: `;
 
       row.innerHTML = `<span style="width:16px; display:inline-block;"></span>${keyPrefix}${formattedVal}${!isLast ? '<span class="comma">,</span>' : ''}`;
       container.appendChild(row);
@@ -1399,7 +1002,7 @@
   }
 
   // ==========================================
-  // SEARCH 1: Raw JSON Editor Search
+  // 8. SEARCH: Raw JSON Editor
   // ==========================================
   function applyRawSearch() {
     const query = rawSearchInput.value;
@@ -1451,14 +1054,10 @@
     rawBackdrop.innerHTML = html;
     rawSearchCount.textContent = `${currentRawMatchIndex + 1}/${rawSearchIndices.length}`;
 
-    // Auto-scroll raw textarea to the active match
     if (currentRawMatchIndex >= 0) {
       const active = rawSearchIndices[currentRawMatchIndex];
-      const upToMatch = text.substring(0, active.start);
-      const lineNumber = upToMatch.split('\n').length;
-      const lineHeight = 19.5;
-      const targetScroll = (lineNumber - 4) * lineHeight;
-      jsonInput.scrollTop = Math.max(0, targetScroll);
+      const lineNumber = text.substring(0, active.start).split('\n').length;
+      jsonInput.scrollTop = Math.max(0, (lineNumber - 4) * 19.5);
       lineNumbers.scrollTop = jsonInput.scrollTop;
       rawBackdrop.scrollTop = jsonInput.scrollTop;
     }
@@ -1481,7 +1080,7 @@
   rawSearchPrev.addEventListener('click', () => navigateRawSearch(-1));
 
   // ==========================================
-  // SEARCH 2: Tree Hierarchy Search
+  // 9. SEARCH: Tree Hierarchy
   // ==========================================
   function highlightTreeNodes(element, query) {
     if (!query) return;
@@ -1493,7 +1092,6 @@
       if (regex.test(text)) {
         node.innerHTML = text.replace(regex, '<mark class="highlight">$1</mark>');
         
-        // Auto-expand collapsed parents
         let parent = node.closest('.tree-item.collapsed');
         while (parent) {
           parent.classList.remove('collapsed');
@@ -1567,163 +1165,17 @@
   treeSearchPrev.addEventListener('click', () => navigateTreeSearch(-1));
 
   // ==========================================
-  // Action Handlers
+  // 10. TOOLBAR ACTIONS
   // ==========================================
-  function applyRawSearch() {
-    const query = rawSearchInput.value;
-    const text = jsonInput.value;
-    rawSearchIndices = [];
-    currentRawMatchIndex = -1;
-
-    if (!query) {
-      rawBackdrop.innerHTML = '';
-      rawSearchCount.textContent = '0/0';
-      return;
-    }
-
-    const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-    let match;
-    while ((match = regex.exec(text)) !== null) {
-      rawSearchIndices.push({ start: match.index, end: match.index + match[0].length });
-    }
-
-    if (rawSearchIndices.length > 0) {
-      currentRawMatchIndex = 0;
-      updateRawHighlights();
-    } else {
-      rawBackdrop.innerHTML = escapeHtml(text);
-      rawSearchCount.textContent = '0/0';
-    }
-  }
-
-  function updateRawHighlights() {
-    const text = jsonInput.value;
-    if (rawSearchIndices.length === 0) {
-      rawBackdrop.innerHTML = '';
-      rawSearchCount.textContent = '0/0';
-      return;
-    }
-
-    let html = '';
-    let lastIndex = 0;
-
-    rawSearchIndices.forEach((pos, idx) => {
-      html += escapeHtml(text.substring(lastIndex, pos.start));
-      const matchText = escapeHtml(text.substring(pos.start, pos.end));
-      const isActive = idx === currentRawMatchIndex;
-      html += `<mark class="highlight ${isActive ? 'active-match' : ''}">${matchText}</mark>`;
-      lastIndex = pos.end;
-    });
-    html += escapeHtml(text.substring(lastIndex));
-    rawBackdrop.innerHTML = html;
-    rawSearchCount.textContent = `${currentRawMatchIndex + 1}/${rawSearchIndices.length}`;
-
-    if (currentRawMatchIndex >= 0) {
-      const active = rawSearchIndices[currentRawMatchIndex];
-      const lineNumber = text.substring(0, active.start).split('\n').length;
-      jsonInput.scrollTop = Math.max(0, (lineNumber - 4) * 19.5);
-      lineNumbers.scrollTop = jsonInput.scrollTop;
-      rawBackdrop.scrollTop = jsonInput.scrollTop;
-    }
-  }
-
-  function navigateRawSearch(dir) {
-    if (rawSearchIndices.length === 0) return;
-    currentRawMatchIndex = (currentRawMatchIndex + dir + rawSearchIndices.length) % rawSearchIndices.length;
-    updateRawHighlights();
-  }
-
-  rawSearchInput.addEventListener('input', applyRawSearch);
-  rawSearchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      navigateRawSearch(e.shiftKey ? -1 : 1);
-    }
-  });
-  rawSearchNext.addEventListener('click', () => navigateRawSearch(1));
-  rawSearchPrev.addEventListener('click', () => navigateRawSearch(-1));
-
-  function highlightTreeNodes(element, query) {
-    if (!query) return;
-    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-    const targets = element.querySelectorAll('[data-search-target="true"]');
-    targets.forEach(node => {
-      const text = node.textContent;
-      if (regex.test(text)) {
-        node.innerHTML = text.replace(regex, '<mark class="highlight">$1</mark>');
-        let parent = node.closest('.tree-item.collapsed');
-        while (parent) {
-          parent.classList.remove('collapsed');
-          parent = parent.parentElement ? parent.parentElement.closest('.tree-item.collapsed') : null;
-        }
-      }
-    });
-  }
-
-  function applyTreeSearch() {
-    if (!treeToggle.checked) return;
-    const query = treeSearchInput.value.trim();
-    treeMatches = [];
-    currentTreeMatchIndex = -1;
-
-    if (!query) {
-      treeSearchCount.textContent = '0/0';
-      return;
-    }
-
-    highlightTreeNodes(viewerOutput, query);
-    treeMatches = Array.from(viewerOutput.querySelectorAll('mark.highlight'));
-    if (treeMatches.length > 0) {
-      currentTreeMatchIndex = 0;
-      updateActiveTreeMatch();
-    } else {
-      treeSearchCount.textContent = '0/0';
-    }
-  }
-
-  function updateActiveTreeMatch() {
-    if (treeMatches.length === 0) {
-      treeSearchCount.textContent = '0/0';
-      return;
-    }
-    treeMatches.forEach((el, i) => {
-      if (i === currentTreeMatchIndex) {
-        el.classList.add('active-match');
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else {
-        el.classList.remove('active-match');
-      }
-    });
-    treeSearchCount.textContent = `${currentTreeMatchIndex + 1}/${treeMatches.length}`;
-  }
-
-  function navigateTreeSearch(dir) {
-    if (treeMatches.length === 0) return;
-    currentTreeMatchIndex = (currentTreeMatchIndex + dir + treeMatches.length) % treeMatches.length;
-    updateActiveTreeMatch();
-  }
-
-  treeSearchInput.addEventListener('input', () => { if (treeToggle.checked) validateAndProcess(); });
-  treeSearchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      navigateTreeSearch(e.shiftKey ? -1 : 1);
-    }
-  });
-  treeSearchNext.addEventListener('click', () => navigateTreeSearch(1));
-  treeSearchPrev.addEventListener('click', () => navigateTreeSearch(-1));
-
   document.getElementById('btn-format').addEventListener('click', () => {
     try {
       const obj = JSON.parse(jsonInput.value);
       jsonInput.value = JSON.stringify(obj, null, 2);
       validateAndProcess();
       applyRawSearch();
-    } catch { validateAndProcess(); }
-      jsonInput.value = JSON.stringify(JSON.parse(jsonInput.value), null, 2);
+    } catch {
       validateAndProcess();
-      applyRawSearch();
-    } catch { validateAndProcess(); }
+    }
   });
 
   document.getElementById('btn-minify').addEventListener('click', () => {
@@ -1732,21 +1184,13 @@
       jsonInput.value = JSON.stringify(obj);
       validateAndProcess();
       applyRawSearch();
-    } catch { validateAndProcess(); }
-      jsonInput.value = JSON.stringify(JSON.parse(jsonInput.value));
+    } catch {
       validateAndProcess();
-      applyRawSearch();
-    } catch { validateAndProcess(); }
+    }
   });
 
   document.getElementById('btn-clear').addEventListener('click', () => {
     jsonInput.value = '';
-    rawSearchInput.value = '';
-    treeSearchInput.value = '';
-    rawSearchCount.textContent = '0/0';
-    treeSearchCount.textContent = '0/0';
-    validateAndProcess();
-    applyRawSearch();
     rawSearchInput.value = '';
     treeSearchInput.value = '';
     rawSearchCount.textContent = '0/0';
@@ -1765,8 +1209,7 @@
     });
   });
 
-  // Initial Execution
-  // Initial Load from localStorage or Default
+  // Load from localStorage or Default Test JSON
   const savedJson = localStorage.getItem('shared_json_left');
   if (savedJson) {
     jsonInput.value = savedJson;
@@ -1777,7 +1220,7 @@
       "isActive": true,
       "license": null,
       "settings": {
-        "theme": "dark",
+        "theme": "grey",
         "fontSize": 13,
         "features": {
           "liveReload": true,
@@ -1793,7 +1236,6 @@
   }
 
   updateLineNumbers();
-  validateAndProcess();
   validateAndProcess();
 </script>
 </body>
