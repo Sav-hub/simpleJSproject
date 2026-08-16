@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>JSON Studio - Side-by-Side Diff</title>
+  <title>XML Studio - Side-by-Side Diff</title>
   <style>
     :root {
       --bg: #1e2430;
@@ -408,22 +408,21 @@
 </head>
 <body>
 
-  <!-- Top Navigation Header -->
   <header class="top-nav">
     <div class="brand">
-      JSON <span>Studio</span>
+      XML <span>Studio</span>
     </div>
     <div class="nav-tabs">
       <div class="lang-switcher-wrapper">
         <div class="lang-toggle-container">
-          <a href="diff.html" class="active-lang">JSON</a>
-          <a href="xml-diff.html" class="inactive-lang">XML</a>
+          <a href="diff.html" class="inactive-lang">JSON</a>
+          <a href="xml-diff.html" class="active-lang">XML</a>
         </div>
         <p class="lang-label">Language</p>
       </div>
 
-      <a href="index.html" class="tab-link" id="nav-to-viewer">🛠 Viewer & Tree</a>
-      <a href="diff.html" class="tab-link active">⚖️ In-Line Diff Compare</a>
+      <a href="xml-viewer.html" class="tab-link" id="nav-to-viewer">🛠 Viewer & Tree</a>
+      <a href="xml-diff.html" class="tab-link active">⚖️ In-Line Diff Compare</a>
       
       <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Theme">
         <span id="theme-icon">🌙</span>
@@ -432,13 +431,11 @@
     </div>
   </header>
 
-  <!-- Main Side-by-Side Diff Workspace -->
   <main class="main-view">
     <div class="app-container">
-      <!-- Original JSON (Left) -->
       <div class="pane">
         <div class="header">
-          <span>Original (Left) JSON</span>
+          <span>Original (Left) XML</span>
           <div class="actions">
             <button class="sync-scroll-btn active" id="btn-sync-scroll" title="Synchronize scrolling between both editors">
               <span class="status-dot"></span>
@@ -453,16 +450,15 @@
           <div class="line-numbers" id="diff-lines-left"></div>
           <div class="textarea-container">
             <div id="diff-backdrop-left" class="backdrop-layer"></div>
-            <textarea id="diff-input-left" spellcheck="false" placeholder="Paste original JSON..."></textarea>
+            <textarea id="diff-input-left" spellcheck="false" placeholder="Paste original XML..."></textarea>
           </div>
         </div>
       </div>
 
-      <!-- Modified JSON (Right) -->
       <div class="pane">
         <div class="header">
           <div style="display:flex; align-items:center; gap:8px;">
-            <span>Modified (Right) JSON</span>
+            <span>Modified (Right) XML</span>
             <div class="diff-filters">
               <button class="filter-btn filter-all active" id="filter-btn-all">All</button>
               <button class="filter-btn filter-add" id="filter-btn-add">+0 Added</button>
@@ -480,7 +476,7 @@
           <div class="line-numbers" id="diff-lines-right"></div>
           <div class="textarea-container">
             <div id="diff-backdrop-right" class="backdrop-layer"></div>
-            <textarea id="diff-input-right" spellcheck="false" placeholder="Paste modified JSON..."></textarea>
+            <textarea id="diff-input-right" spellcheck="false" placeholder="Paste modified XML..."></textarea>
           </div>
         </div>
       </div>
@@ -488,7 +484,6 @@
   </main>
 
 <script>
-  // Theme Toggle
   const themeToggleBtn = document.getElementById('theme-toggle-btn');
   const themeIcon = document.getElementById('theme-icon');
   const themeLabel = document.getElementById('theme-label');
@@ -535,7 +530,7 @@
   let activeDiffFilter = 'ALL';
 
   navToViewer.addEventListener('click', () => {
-    localStorage.setItem('shared_json_left', diffInputLeft.value);
+    localStorage.setItem('shared_xml_left', diffInputLeft.value);
   });
 
   btnSyncScroll.addEventListener('click', () => {
@@ -575,7 +570,7 @@
   });
 
   diffInputLeft.addEventListener('input', () => {
-    localStorage.setItem('shared_json_left', diffInputLeft.value);
+    localStorage.setItem('shared_xml_left', diffInputLeft.value);
     executeLineByLineDiff();
   });
   diffInputRight.addEventListener('input', executeLineByLineDiff);
@@ -613,18 +608,15 @@
 
     diffA.forEach((typeA, idxA) => {
       const lineA = linesA[idxA].trim();
-      const matchA = lineA.match(/"([^"]+)":/);
-      if (matchA) {
-        const keyA = matchA[1];
-        diffB.forEach((typeB, idxB) => {
-          const lineB = linesB[idxB].trim();
-          const matchB = lineB.match(/"([^"]+)":/);
-          if (matchB && matchB[1] === keyA) {
-            diffA.set(idxA, 'MOD');
-            diffB.set(idxB, 'MOD');
-          }
-        });
-      }
+      diffB.forEach((typeB, idxB) => {
+        const lineB = linesB[idxB].trim();
+        const tagA = (lineA.match(/^<([a-zA-Z0-9_\-]+)/) || [])[1];
+        const tagB = (lineB.match(/^<([a-zA-Z0-9_\-]+)/) || [])[1];
+        if (tagA && tagB && tagA === tagB) {
+          diffA.set(idxA, 'MOD');
+          diffB.set(idxB, 'MOD');
+        }
+      });
     });
 
     return { diffA, diffB };
@@ -704,28 +696,41 @@
   filterBtnDel.addEventListener('click', () => setDiffFilter('DEL'));
   filterBtnMod.addEventListener('click', () => setDiffFilter('MOD'));
 
-  // Test Datasets (JSON)
-  const sampleOriginalJson = {
-    "clusterId": "k8s-prod-us-east-01",
-    "version": "1.28.4",
-    "region": "us-east-1",
-    "environment": "staging",
-    "nodes": 3,
-    "services": ["auth", "payment"]
-  };
+  function formatXml(xml) {
+    let formatted = '', indent = '';
+    const tab = '  ';
+    xml.split(/>\s*</).forEach(node => {
+      if (node.match(/^\/\w/)) indent = indent.substring(tab.length);
+      formatted += indent + '<' + node + '>\r\n';
+      if (node.match(/^<?\w[^>]*[^\/]$/)) indent += tab;
+    });
+    return formatted.substring(1, formatted.length - 3);
+  }
 
-  const sampleModifiedJson = {
-    "clusterId": "k8s-prod-us-east-01",
-    "version": "1.30.2",
-    "region": "us-east-1",
-    "environment": "production",
-    "nodes": 6,
-    "services": ["auth", "payment", "analytics"]
-  };
+  const sampleXmlLeft = `<cluster id="k8s-prod-us-east-01" region="us-east-1">
+  <version>1.28.4</version>
+  <environment>staging</environment>
+  <nodes>3</nodes>
+  <services>
+    <service name="auth">Active</service>
+    <service name="payment">Active</service>
+  </services>
+</cluster>`;
+
+  const sampleXmlRight = `<cluster id="k8s-prod-us-east-01" region="us-east-1">
+  <version>1.30.2</version>
+  <environment>production</environment>
+  <nodes>6</nodes>
+  <services>
+    <service name="auth">Active</service>
+    <service name="payment">Active</service>
+    <service name="analytics">Active</service>
+  </services>
+</cluster>`;
 
   document.getElementById('btn-diff-load-sample').addEventListener('click', () => {
-    diffInputLeft.value = JSON.stringify(sampleOriginalJson, null, 2);
-    diffInputRight.value = JSON.stringify(sampleModifiedJson, null, 2);
+    diffInputLeft.value = sampleXmlLeft;
+    diffInputRight.value = sampleXmlRight;
     executeLineByLineDiff();
   });
 
@@ -737,17 +742,13 @@
   });
 
   document.getElementById('btn-diff-format-left').addEventListener('click', () => {
-    try {
-      diffInputLeft.value = JSON.stringify(JSON.parse(diffInputLeft.value), null, 2);
-      executeLineByLineDiff();
-    } catch {}
+    diffInputLeft.value = formatXml(diffInputLeft.value);
+    executeLineByLineDiff();
   });
 
   document.getElementById('btn-diff-format-right').addEventListener('click', () => {
-    try {
-      diffInputRight.value = JSON.stringify(JSON.parse(diffInputRight.value), null, 2);
-      executeLineByLineDiff();
-    } catch {}
+    diffInputRight.value = formatXml(diffInputRight.value);
+    executeLineByLineDiff();
   });
 
   document.getElementById('btn-diff-clear-left').addEventListener('click', () => {
@@ -760,12 +761,9 @@
     executeLineByLineDiff();
   });
 
-  // Initial Load: Strict Check against XML data in shared cache
-  const sharedLeft = localStorage.getItem('shared_json_left');
-  const isRealJson = sharedLeft && sharedLeft.trim().startsWith('{');
-  
-  diffInputLeft.value = isRealJson ? sharedLeft : JSON.stringify(sampleOriginalJson, null, 2);
-  diffInputRight.value = JSON.stringify(sampleModifiedJson, null, 2);
+  const sharedXml = localStorage.getItem('shared_xml_left');
+  diffInputLeft.value = sharedXml || sampleXmlLeft;
+  diffInputRight.value = sampleXmlRight;
   executeLineByLineDiff();
 </script>
 </body>

@@ -3,13 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>JSON Studio - Viewer & Formatter</title>
+  <title>XML Studio - Viewer & Formatter</title>
   <style>
-    /* =========================================
-       1. THEME DEFINITIONS (CSS VARIABLES)
-       ========================================= */
     :root {
-      /* Default: Grey Theme */
       --bg: #1e2430;
       --panel-bg: #282f3d;
       --panel-header: #323b4c;
@@ -20,14 +16,18 @@
       --accent-hover: #4f46e5;
       --editor-bg: #181d27;
       --gutter-bg: #141820;
-      --key-color: #60a5fa;
-      --str-color: #34d399;
-      --num-color: #fb923c;
-      --bool-color: #c084fc;
-      --null-color: #f87171;
+      
+      /* XML Syntax */
+      --xml-bracket: #94a3b8;
+      --xml-tag: #60a5fa;
+      --xml-attr: #38bdf8;
+      --xml-attr-val: #fb923c;
+      --xml-text: #34d399;
+
       --error-bg: rgba(239, 68, 68, 0.15);
       --error-border: rgba(239, 68, 68, 0.35);
       --error-text: #fca5a5;
+
       --hl-bg: #fef08a;
       --hl-text: #0f172a;
       --hl-active-bg: #facc15;
@@ -35,7 +35,6 @@
     }
 
     body.dark-theme {
-      /* Midnight / Deep Dark Theme */
       --bg: #0b0f19;
       --panel-bg: #111827;
       --panel-header: #151d30;
@@ -46,11 +45,13 @@
       --accent-hover: #4f46e5;
       --editor-bg: #0d1117;
       --gutter-bg: #0d1321;
-      --key-color: #38bdf8;
-      --str-color: #4ade80;
-      --num-color: #fb923c;
-      --bool-color: #c084fc;
-      --null-color: #f43f5e;
+      
+      --xml-bracket: #64748b;
+      --xml-tag: #38bdf8;
+      --xml-attr: #7dd3fc;
+      --xml-attr-val: #fb923c;
+      --xml-text: #4ade80;
+
       --error-bg: rgba(239, 68, 68, 0.1);
       --error-border: rgba(239, 68, 68, 0.3);
       --error-text: #f87171;
@@ -68,7 +69,6 @@
       transition: background-color 0.2s ease, color 0.2s ease;
     }
 
-    /* Top Navigation Bar */
     .top-nav {
       background: var(--panel-header);
       border-bottom: 1px solid var(--border);
@@ -116,7 +116,6 @@
       box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
 
-    /* Language Switcher Pill */
     .lang-switcher-wrapper {
       display: flex;
       flex-direction: column;
@@ -157,7 +156,6 @@
       letter-spacing: 0.5px;
     }
 
-    /* Theme Switcher Button */
     .theme-toggle-btn {
       background: var(--panel-bg);
       color: var(--text);
@@ -243,7 +241,6 @@
     button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
     button.primary:hover { background: var(--accent-hover); }
 
-    /* Search Toolbar */
     .search-box {
       display: flex;
       align-items: center;
@@ -282,7 +279,6 @@
     }
     .search-nav-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--text); }
 
-    /* Switch Slider */
     .switch-container {
       display: flex;
       align-items: center;
@@ -321,7 +317,6 @@
     input:checked + .slider { background-color: var(--accent); }
     input:checked + .slider:before { transform: translateX(16px); }
 
-    /* Editor Layout */
     .editor-wrapper {
       flex: 1;
       display: flex;
@@ -353,15 +348,6 @@
       color: #ffffff;
       font-weight: 700;
       border-radius: 3px 0 0 3px;
-      position: relative;
-    }
-    .line-numbers div.error-line::after {
-      content: "▶";
-      position: absolute;
-      right: -3px;
-      top: 0;
-      font-size: 9px;
-      color: #ef4444;
     }
 
     .textarea-container {
@@ -405,7 +391,6 @@
       z-index: 2;
     }
 
-    /* Diagnostics Section */
     .editor-footer {
       background: var(--panel-header);
       border-top: 1px solid var(--border);
@@ -423,9 +408,7 @@
       flex-direction: column;
       gap: 2px;
       padding: 5px 0;
-      border-bottom: 1px solid rgba(239, 68, 68, 0.15);
     }
-    .error-item:last-child { border-bottom: none; }
     .error-title-row { display: flex; align-items: center; gap: 8px; }
     .error-tag {
       background: #ef4444;
@@ -436,11 +419,8 @@
       font-weight: 700;
       text-transform: uppercase;
     }
-    .error-line-badge { color: var(--error-text); font-weight: 600; font-size: 12px; }
-    .error-msg { color: var(--text); font-size: 12px; margin-left: 2px; }
-    .error-hint { color: var(--error-text); font-size: 11px; margin-left: 2px; }
+    .error-msg { color: var(--text); font-size: 12px; }
 
-    /* Tree View Output */
     #tree-pane { display: none; }
     #viewer-output {
       flex: 1;
@@ -504,25 +484,11 @@
       margin-left: 4px;
     }
 
-    .bracket { color: #94a3b8; font-weight: bold; }
-    .key { color: var(--key-color); }
-    .str { color: var(--str-color); }
-    .num { color: var(--num-color); }
-    .bool { color: var(--bool-color); }
-    .null { color: var(--null-color); font-weight: bold; }
-    .comma { color: #94a3b8; }
-
-    /* Highlights */
-    #raw-backdrop mark.highlight {
-      background-color: rgba(250, 204, 21, 0.3);
-      color: transparent !important;
-      border-radius: 2px;
-      box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.4);
-    }
-    #raw-backdrop mark.highlight.active-match {
-      background-color: rgba(250, 204, 21, 0.65);
-      box-shadow: 0 0 0 1px #eab308, 0 0 6px rgba(250, 204, 21, 0.8);
-    }
+    .xml-b { color: var(--xml-bracket); font-weight: bold; }
+    .xml-t { color: var(--xml-tag); font-weight: 600; }
+    .xml-a { color: var(--xml-attr); margin-left: 6px; }
+    .xml-v { color: var(--xml-attr-val); }
+    .xml-val { color: var(--xml-text); margin-left: 4px; }
 
     mark.highlight {
       background-color: var(--hl-bg);
@@ -543,22 +509,21 @@
 </head>
 <body>
 
-  <!-- Top Navigation Header -->
   <header class="top-nav">
     <div class="brand">
-      JSON <span>Studio</span>
+      XML <span>Studio</span>
     </div>
     <div class="nav-tabs">
       <div class="lang-switcher-wrapper">
         <div class="lang-toggle-container">
-          <a href="index.html" class="active-lang">JSON</a>
-          <a href="xml-viewer.html" class="inactive-lang">XML</a>
+          <a href="index.html" class="inactive-lang">JSON</a>
+          <a href="xml-viewer.html" class="active-lang">XML</a>
         </div>
         <p class="lang-label">Language</p>
       </div>
 
-      <a href="index.html" class="tab-link active">🛠 Viewer & Tree</a>
-      <a href="diff.html" class="tab-link" id="nav-to-diff">⚖️ In-Line Diff Compare</a>
+      <a href="xml-viewer.html" class="tab-link active">🛠 Viewer & Tree</a>
+      <a href="xml-diff.html" class="tab-link" id="nav-to-diff">⚖️ In-Line Diff Compare</a>
       
       <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Theme">
         <span id="theme-icon">🌙</span>
@@ -567,14 +532,12 @@
     </div>
   </header>
 
-  <!-- Main View -->
   <main class="main-view">
     <div class="app-container single-pane" id="app-container">
       
-      <!-- Raw JSON Pane -->
       <div class="pane">
         <div class="header">
-          <span>Raw JSON Editor</span>
+          <span>Raw XML Editor</span>
           <div class="actions">
             <div class="search-box">
               <input type="text" id="raw-search-input" class="search-input" placeholder="Search text..." />
@@ -601,7 +564,7 @@
           <div class="line-numbers" id="line-numbers"></div>
           <div class="textarea-container">
             <div id="raw-backdrop"></div>
-            <textarea id="json-input" spellcheck="false" placeholder="Paste or type JSON here..."></textarea>
+            <textarea id="xml-input" spellcheck="false" placeholder="Paste or type XML here..."></textarea>
           </div>
         </div>
         <div class="editor-footer" id="editor-footer">
@@ -609,10 +572,9 @@
         </div>
       </div>
 
-      <!-- Tree View Output Pane -->
       <div class="pane" id="tree-pane">
         <div class="header">
-          <span>Tree Hierarchy</span>
+          <span>XML Node Hierarchy</span>
           <div class="actions">
             <div class="search-box">
               <input type="text" id="tree-search-input" class="search-input" placeholder="Search tree..." />
@@ -633,7 +595,6 @@
   </main>
 
 <script>
-  // Theme Toggle System
   const themeToggleBtn = document.getElementById('theme-toggle-btn');
   const themeIcon = document.getElementById('theme-icon');
   const themeLabel = document.getElementById('theme-label');
@@ -658,8 +619,7 @@
 
   applyTheme(localStorage.getItem('json_studio_theme') || 'grey');
 
-  // DOM Elements
-  const jsonInput = document.getElementById('json-input');
+  const xmlInput = document.getElementById('xml-input');
   const lineNumbers = document.getElementById('line-numbers');
   const rawBackdrop = document.getElementById('raw-backdrop');
   const treePane = document.getElementById('tree-pane');
@@ -687,11 +647,11 @@
   let errorLinesSet = new Set();
 
   navToDiff.addEventListener('click', () => {
-    localStorage.setItem('shared_json_left', jsonInput.value);
+    localStorage.setItem('shared_xml_left', xmlInput.value);
   });
 
   function updateLineNumbers() {
-    const lines = jsonInput.value.split('\n').length;
+    const lines = xmlInput.value.split('\n').length;
     let html = '';
     for (let i = 1; i <= lines; i++) {
       const isErr = errorLinesSet.has(i);
@@ -700,19 +660,18 @@
     lineNumbers.innerHTML = html;
   }
 
-  jsonInput.addEventListener('input', () => {
+  xmlInput.addEventListener('input', () => {
     validateAndProcess();
     applyRawSearch();
-    localStorage.setItem('shared_json_left', jsonInput.value);
+    localStorage.setItem('shared_xml_left', xmlInput.value);
   });
 
-  jsonInput.addEventListener('scroll', () => {
-    lineNumbers.scrollTop = jsonInput.scrollTop;
-    rawBackdrop.scrollTop = jsonInput.scrollTop;
-    rawBackdrop.scrollLeft = jsonInput.scrollLeft;
+  xmlInput.addEventListener('scroll', () => {
+    lineNumbers.scrollTop = xmlInput.scrollTop;
+    rawBackdrop.scrollTop = xmlInput.scrollTop;
+    rawBackdrop.scrollLeft = xmlInput.scrollLeft;
   });
 
-  // Fixed: Tree View Toggle Handler
   function setTreeViewVisibility(show) {
     treeToggle.checked = show;
     if (show) {
@@ -726,203 +685,81 @@
     }
   }
 
-  treeToggle.addEventListener('change', (e) => {
-    setTreeViewVisibility(e.target.checked);
-  });
+  treeToggle.addEventListener('change', (e) => setTreeViewVisibility(e.target.checked));
+  btnCloseTree.addEventListener('click', () => setTreeViewVisibility(false));
 
-  btnCloseTree.addEventListener('click', () => {
-    setTreeViewVisibility(false);
-  });
-
-  function scanAllErrors(raw) {
-    const errors = [];
-    const lines = raw.split('\n');
-    const stack = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const lineNum = i + 1;
-      const originalLine = lines[i];
-      const trimmed = originalLine.trim();
-      if (!trimmed) continue;
-
-      let quoteCount = 0;
-      for (let c = 0; c < originalLine.length; c++) {
-        if (originalLine[c] === '"' && (c === 0 || originalLine[c - 1] !== '\\')) quoteCount++;
-      }
-
-      if (quoteCount % 2 !== 0) {
-        if (/"[a-zA-Z0-9_-]+:/.test(originalLine)) {
-          errors.push({ line: lineNum, msg: `Unclosed string & misplaced colon in key: <code>${escapeHtml(trimmed)}</code>`, hint: `Ensure key is quoted before colon: <code>"id": 101</code>.` });
-        } else {
-          errors.push({ line: lineNum, msg: `Unclosed string quote.`, hint: `Make sure opening quotes have matching closing quotes.` });
-        }
-      }
-
-      if (/"[a-zA-Z0-9_-]+:"\s*[^,\s]/.test(originalLine)) {
-        errors.push({ line: lineNum, msg: `Colon inside string quotes.`, hint: `Move the colon outside: change <code>"key:"</code> to <code>"key":</code>.` });
-      }
-
-      if (/'[^']*'/.test(originalLine) && !/"/.test(originalLine)) {
-        errors.push({ line: lineNum, msg: `Single quotes used.`, hint: `JSON requires double quotes <code>"</code>.` });
-      }
-
-      const endsWithValue = /(".*"|\d+|true|false|null|\]|\})$/.test(trimmed);
-      if (endsWithValue) {
-        for (let j = i + 1; j < lines.length; j++) {
-          const nextTrimmed = lines[j].trim();
-          if (!nextTrimmed) continue;
-          if (/^(".*"|{|\[)/.test(nextTrimmed) && !nextTrimmed.startsWith('}') && !nextTrimmed.startsWith(']')) {
-            errors.push({ line: lineNum, msg: `Missing comma at line end.`, hint: `Add a comma <code>,</code> after <code>${escapeHtml(trimmed)}</code>.` });
-          }
-          break;
-        }
-      }
-
-      if (trimmed.endsWith(',') && i + 1 < lines.length) {
-        for (let j = i + 1; j < lines.length; j++) {
-          const nextTrimmed = lines[j].trim();
-          if (!nextTrimmed) continue;
-          if (nextTrimmed.startsWith('}') || nextTrimmed.startsWith(']')) {
-            errors.push({ line: lineNum, msg: `Trailing comma before closing bracket <code>${nextTrimmed[0]}</code>.`, hint: `Remove the trailing comma.` });
-          }
-          break;
-        }
-      }
-
-      let inString = false;
-      for (let c = 0; c < originalLine.length; c++) {
-        const char = originalLine[c];
-        if (char === '"' && (c === 0 || originalLine[c - 1] !== '\\')) inString = !inString;
-        if (!inString) {
-          if (char === '{' || char === '[') {
-            stack.push({ char, line: lineNum });
-          } else if (char === '}' || char === ']') {
-            if (stack.length === 0) {
-              errors.push({ line: lineNum, msg: `Unmatched closing bracket <code>${char}</code>.`, hint: `No matching opening bracket found.` });
-            } else {
-              const last = stack.pop();
-              if ((char === '}' && last.char !== '{') || (char === ']' && last.char !== '[')) {
-                errors.push({ line: lineNum, msg: `Mismatched bracket: closed <code>${char}</code> but opened <code>${last.char}</code> on line ${last.line}.`, hint: `Ensure matching brackets.` });
-              }
-            }
-          }
-        }
-      }
-    }
-
-    while (stack.length > 0) {
-      const unclosed = stack.pop();
-      errors.push({ line: unclosed.line, msg: `Unclosed bracket <code>${unclosed.char}</code>.`, hint: `Missing closing bracket <code>${unclosed.char === '{' ? '}' : ']'}</code>.` });
-    }
-
-    if (errors.length === 0) {
-      try {
-        JSON.parse(raw);
-      } catch (err) {
-        let line = 1;
-        const lineColMatch = err.message.match(/line (\d+)/i);
-        if (lineColMatch) {
-          line = parseInt(lineColMatch[1], 10);
-        } else {
-          const posMatch = err.message.match(/position (\d+)/i);
-          if (posMatch) {
-            line = raw.slice(0, parseInt(posMatch[1], 10)).split('\n').length;
-          }
-        }
-        errors.push({ line, msg: escapeHtml(err.message), hint: `Please check JSON syntax on or around this line.` });
-      }
-    }
-
-    const unique = [];
-    const seen = new Set();
-    for (const item of errors) {
-      const key = `${item.line}-${item.msg}`;
-      if (!seen.has(key)) { seen.add(key); unique.push(item); }
-    }
-    return unique.sort((a, b) => a.line - b.line);
+  function escapeXml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  function validateAndProcess() {
-    const raw = jsonInput.value;
-    if (!raw.trim()) {
-      errorLinesSet.clear();
-      updateLineNumbers();
-      editorFooter.className = 'editor-footer';
-      editorFooter.innerHTML = '<span style="color: var(--text-muted);">Status: Ready (Empty document)</span>';
-      viewerOutput.innerHTML = '<span style="color: var(--text-muted);">No JSON data to display.</span>';
-      return;
+  function buildXmlTreeNode(xmlNode) {
+    if (xmlNode.nodeType === Node.DOCUMENT_NODE) {
+      return buildXmlTreeNode(xmlNode.documentElement);
     }
 
-    let isNativeValid = false;
-    let parsedData = null;
-    try {
-      parsedData = JSON.parse(raw);
-      isNativeValid = true;
-    } catch { isNativeValid = false; }
+    if (xmlNode.nodeType === Node.COMMENT_NODE) {
+      const container = document.createElement('div');
+      container.className = 'tree-item';
+      const row = document.createElement('div');
+      row.className = 'tree-row';
+      row.innerHTML = `<span style="color:#64748b; font-style:italic;">&lt;!-- ${escapeXml(xmlNode.nodeValue)} --&gt;</span>`;
+      container.appendChild(row);
+      return container;
+    }
 
-    if (isNativeValid) {
-      errorLinesSet.clear();
-      updateLineNumbers();
-      editorFooter.className = 'editor-footer';
-      editorFooter.innerHTML = '<span style="color: #34d399; font-weight: 600;">✓ Valid JSON (0 errors)</span>';
+    if (xmlNode.nodeType === Node.ELEMENT_NODE) {
+      const container = document.createElement('div');
+      container.className = 'tree-item';
 
-      if (treeToggle.checked) {
-        viewerOutput.innerHTML = '';
-        viewerOutput.appendChild(buildTreeNode(parsedData, null, true));
-        applyTreeSearch();
+      const tagName = xmlNode.nodeName;
+      let attrString = '';
+      if (xmlNode.attributes && xmlNode.attributes.length > 0) {
+        for (let i = 0; i < xmlNode.attributes.length; i++) {
+          const attr = xmlNode.attributes[i];
+          attrString += ` <span class="xml-a">${escapeXml(attr.name)}</span>=<span class="xml-v">"${escapeXml(attr.value)}"</span>`;
+        }
       }
-    } else {
-      const detectedErrors = scanAllErrors(raw);
-      errorLinesSet = new Set(detectedErrors.map(e => e.line));
-      updateLineNumbers();
 
-      editorFooter.className = 'editor-footer has-error';
-      let errHtml = `<div style="font-weight: 700; color: #f87171; margin-bottom: 6px;">✕ ${detectedErrors.length} Syntax Error${detectedErrors.length > 1 ? 's' : ''} Detected:</div>`;
-      detectedErrors.forEach((err, idx) => {
-        errHtml += `
-          <div class="error-item">
-            <div class="error-title-row">
-              <span class="error-tag">Error ${idx + 1}</span>
-              <span class="error-line-badge">Line ${err.line}</span>
-              <span class="error-msg">${err.msg}</span>
-            </div>
-            <div class="error-hint"><strong>Fix:</strong> ${err.hint}</div>
-          </div>
-        `;
+      const childNodes = Array.from(xmlNode.childNodes).filter(n => {
+        if (n.nodeType === Node.TEXT_NODE) return n.nodeValue.trim().length > 0;
+        return n.nodeType === Node.ELEMENT_NODE || n.nodeType === Node.COMMENT_NODE;
       });
-      editorFooter.innerHTML = errHtml;
 
-      if (treeToggle.checked) {
-        viewerOutput.innerHTML = `<div style="color: #f87171; background: var(--error-bg); padding: 14px; border-radius: 6px; border: 1px solid var(--error-border);">Fix the highlighted errors in the raw editor to render tree.</div>`;
+      if (childNodes.length === 0) {
+        const row = document.createElement('div');
+        row.className = 'tree-row';
+        row.innerHTML = `<span class="xml-b">&lt;</span><span class="xml-t" data-search-target="true">${escapeXml(tagName)}</span>${attrString}<span class="xml-b"> /&gt;</span>`;
+        container.appendChild(row);
+        return container;
       }
-    }
-  }
 
-  function buildTreeNode(val, key = null, isLast = true) {
-    const isArray = Array.isArray(val);
-    const isObject = val !== null && typeof val === 'object';
-    const container = document.createElement('div');
-    container.className = 'tree-item';
-
-    if (isObject) {
-      const keys = Object.keys(val);
-      const openBracket = isArray ? '[' : '{';
-      const closeBracket = isArray ? ']' : '}';
-      const count = keys.length;
+      const isSimpleText = childNodes.length === 1 && childNodes[0].nodeType === Node.TEXT_NODE;
+      if (isSimpleText) {
+        const row = document.createElement('div');
+        row.className = 'tree-row';
+        const textVal = escapeXml(childNodes[0].nodeValue.trim());
+        row.innerHTML = `
+          <span class="xml-b">&lt;</span><span class="xml-t" data-search-target="true">${escapeXml(tagName)}</span>${attrString}<span class="xml-b">&gt;</span>
+          <span class="xml-val" data-search-target="true">${textVal}</span>
+          <span class="xml-b">&lt;/</span><span class="xml-t">${escapeXml(tagName)}</span><span class="xml-b">&gt;</span>
+        `;
+        container.appendChild(row);
+        return container;
+      }
 
       const row = document.createElement('div');
       row.className = 'tree-row';
+
       const caret = document.createElement('span');
       caret.className = 'caret-btn';
       caret.textContent = '▼';
 
-      let keyPrefix = key !== null ? `<span class="key" data-search-target="true">"${escapeHtml(key)}"</span>: ` : '';
-      row.innerHTML = `${keyPrefix}<span class="bracket">${openBracket}</span>`;
+      row.innerHTML = `<span class="xml-b">&lt;</span><span class="xml-t" data-search-target="true">${escapeXml(tagName)}</span>${attrString}<span class="xml-b">&gt;</span>`;
       row.prepend(caret);
 
       const summaryBadge = document.createElement('span');
       summaryBadge.className = 'badge-summary';
-      summaryBadge.textContent = `${count} ${isArray ? 'items' : 'keys'} ${closeBracket}`;
+      summaryBadge.textContent = `${childNodes.length} nodes &lt;/${tagName}&gt;`;
       row.appendChild(summaryBadge);
 
       const toggleCollapse = (e) => {
@@ -935,42 +772,73 @@
       const childrenWrapper = document.createElement('div');
       childrenWrapper.className = 'tree-children';
 
-      keys.forEach((k, idx) => {
-        const isChildLast = idx === keys.length - 1;
-        childrenWrapper.appendChild(buildTreeNode(val[k], isArray ? null : k, isChildLast));
+      childNodes.forEach(child => {
+        childrenWrapper.appendChild(buildXmlTreeNode(child));
       });
 
       const closingRow = document.createElement('div');
       closingRow.className = 'tree-row';
-      closingRow.innerHTML = `<span class="bracket">${closeBracket}</span>${!isLast ? '<span class="comma">,</span>' : ''}`;
+      closingRow.innerHTML = `<span class="xml-b">&lt;/</span><span class="xml-t">${escapeXml(tagName)}</span><span class="xml-b">&gt;</span>`;
 
       container.appendChild(row);
       container.appendChild(childrenWrapper);
       container.appendChild(closingRow);
-    } else {
-      const row = document.createElement('div');
-      row.className = 'tree-row';
-
-      let formattedVal = '';
-      if (typeof val === 'string') formattedVal = `<span class="str" data-search-target="true">"${escapeHtml(val)}"</span>`;
-      else if (typeof val === 'number') formattedVal = `<span class="num" data-search-target="true">${val}</span>`;
-      else if (typeof val === 'boolean') formattedVal = `<span class="bool" data-search-target="true">${val}</span>`;
-      else if (val === null) formattedVal = `<span class="null" data-search-target="true">null</span>`;
-
-      let keyPrefix = key !== null ? `<span class="key" data-search-target="true">"${escapeHtml(key)}"</span>: ` : '';
-      row.innerHTML = `<span style="width:16px; display:inline-block;"></span>${keyPrefix}${formattedVal}${!isLast ? '<span class="comma">,</span>' : ''}`;
-      container.appendChild(row);
+      return container;
     }
-    return container;
+
+    return document.createElement('div');
   }
 
-  function escapeHtml(str) {
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  function validateAndProcess() {
+    const raw = xmlInput.value;
+    if (!raw.trim()) {
+      errorLinesSet.clear();
+      updateLineNumbers();
+      editorFooter.className = 'editor-footer';
+      editorFooter.innerHTML = '<span style="color: var(--text-muted);">Status: Ready (Empty document)</span>';
+      viewerOutput.innerHTML = '<span style="color: var(--text-muted);">No XML data to display.</span>';
+      return;
+    }
+
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(raw, "application/xml");
+    const parseError = xmlDoc.querySelector("parsererror");
+
+    if (parseError) {
+      errorLinesSet = new Set([1]);
+      updateLineNumbers();
+      editorFooter.className = 'editor-footer has-error';
+      editorFooter.innerHTML = `<div class="error-item"><span class="error-tag">XML Error</span><span class="error-msg">${escapeXml(parseError.textContent.slice(0, 180))}...</span></div>`;
+      if (treeToggle.checked) {
+        viewerOutput.innerHTML = `<div style="color: #f87171; padding: 12px; border: 1px solid var(--error-border);">Invalid XML. Fix syntax errors above to render tree.</div>`;
+      }
+    } else {
+      errorLinesSet.clear();
+      updateLineNumbers();
+      editorFooter.className = 'editor-footer';
+      editorFooter.innerHTML = `<span style="color: var(--xml-text); font-weight: 600;">✓ Valid XML</span>`;
+      if (treeToggle.checked) {
+        viewerOutput.innerHTML = '';
+        viewerOutput.appendChild(buildXmlTreeNode(xmlDoc.documentElement));
+        applyTreeSearch();
+      }
+    }
+  }
+
+  function formatXml(xml) {
+    let formatted = '', indent = '';
+    const tab = '  ';
+    xml.split(/>\s*</).forEach(node => {
+      if (node.match(/^\/\w/)) indent = indent.substring(tab.length);
+      formatted += indent + '<' + node + '>\r\n';
+      if (node.match(/^<?\w[^>]*[^\/]$/)) indent += tab;
+    });
+    return formatted.substring(1, formatted.length - 3);
   }
 
   function applyRawSearch() {
     const query = rawSearchInput.value;
-    const text = jsonInput.value;
+    const text = xmlInput.value;
     rawSearchIndices = [];
     currentRawMatchIndex = -1;
 
@@ -990,13 +858,13 @@
       currentRawMatchIndex = 0;
       updateRawHighlights();
     } else {
-      rawBackdrop.innerHTML = escapeHtml(text);
+      rawBackdrop.innerHTML = escapeXml(text);
       rawSearchCount.textContent = '0/0';
     }
   }
 
   function updateRawHighlights() {
-    const text = jsonInput.value;
+    const text = xmlInput.value;
     if (rawSearchIndices.length === 0) {
       rawBackdrop.innerHTML = '';
       rawSearchCount.textContent = '0/0';
@@ -1007,22 +875,22 @@
     let lastIndex = 0;
 
     rawSearchIndices.forEach((pos, idx) => {
-      html += escapeHtml(text.substring(lastIndex, pos.start));
-      const matchText = escapeHtml(text.substring(pos.start, pos.end));
+      html += escapeXml(text.substring(lastIndex, pos.start));
+      const matchText = escapeXml(text.substring(pos.start, pos.end));
       const isActive = idx === currentRawMatchIndex;
       html += `<mark class="highlight ${isActive ? 'active-match' : ''}">${matchText}</mark>`;
       lastIndex = pos.end;
     });
-    html += escapeHtml(text.substring(lastIndex));
+    html += escapeXml(text.substring(lastIndex));
     rawBackdrop.innerHTML = html;
     rawSearchCount.textContent = `${currentRawMatchIndex + 1}/${rawSearchIndices.length}`;
 
     if (currentRawMatchIndex >= 0) {
       const active = rawSearchIndices[currentRawMatchIndex];
       const lineNumber = text.substring(0, active.start).split('\n').length;
-      jsonInput.scrollTop = Math.max(0, (lineNumber - 4) * 19.5);
-      lineNumbers.scrollTop = jsonInput.scrollTop;
-      rawBackdrop.scrollTop = jsonInput.scrollTop;
+      xmlInput.scrollTop = Math.max(0, (lineNumber - 4) * 19.5);
+      lineNumbers.scrollTop = xmlInput.scrollTop;
+      rawBackdrop.scrollTop = xmlInput.scrollTop;
     }
   }
 
@@ -1117,25 +985,19 @@
   treeSearchPrev.addEventListener('click', () => navigateTreeSearch(-1));
 
   document.getElementById('btn-format').addEventListener('click', () => {
-    try {
-      const obj = JSON.parse(jsonInput.value);
-      jsonInput.value = JSON.stringify(obj, null, 2);
-      validateAndProcess();
-      applyRawSearch();
-    } catch { validateAndProcess(); }
+    xmlInput.value = formatXml(xmlInput.value);
+    validateAndProcess();
+    applyRawSearch();
   });
 
   document.getElementById('btn-minify').addEventListener('click', () => {
-    try {
-      const obj = JSON.parse(jsonInput.value);
-      jsonInput.value = JSON.stringify(obj);
-      validateAndProcess();
-      applyRawSearch();
-    } catch { validateAndProcess(); }
+    xmlInput.value = xmlInput.value.replace(/>\s+</g, '><').trim();
+    validateAndProcess();
+    applyRawSearch();
   });
 
   document.getElementById('btn-clear').addEventListener('click', () => {
-    jsonInput.value = '';
+    xmlInput.value = '';
     rawSearchInput.value = '';
     treeSearchInput.value = '';
     rawSearchCount.textContent = '0/0';
@@ -1154,30 +1016,20 @@
     });
   });
 
-  // Default JSON Payload
-  const defaultJson = JSON.stringify({
-    "application": "JSON Viewer Suite",
-    "version": 3,
-    "isActive": true,
-    "license": null,
-    "settings": {
-      "theme": "grey",
-      "fontSize": 13,
-      "features": {
-        "liveReload": true,
-        "codeFolding": true,
-        "nestedDepthLimit": 10
-      }
-    },
-    "modules": [
-      { "id": 101, "name": "Parser Engine", "stable": true },
-      { "id": 102, "name": "Tree Visualizer", "stable": true }
-    ]
-  }, null, 2);
+  const defaultXml = `<application name="Studio Suite" version="3.0">
+  <settings theme="grey" fontSize="13">
+    <feature enabled="true">SyntaxHighlighting</feature>
+    <feature enabled="true">TreeFolding</feature>
+  </settings>
+  <modules count="2">
+    <module id="101" stable="true" owner="DevOps">Parser Engine</module>
+    <module id="102" stable="true" owner="Frontend">Tree Visualizer</module>
+  </modules>
+  <metadata deployed="2026-08-16" status="active" />
+</application>`;
 
-  const savedJson = localStorage.getItem('shared_json_left');
-  jsonInput.value = (savedJson && savedJson.trim().startsWith('{')) ? savedJson : defaultJson;
-
+  const savedXml = localStorage.getItem('shared_xml_left');
+  xmlInput.value = savedXml || defaultXml;
   updateLineNumbers();
   validateAndProcess();
 </script>
