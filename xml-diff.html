@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>JSON Studio - Side-by-Side Diff</title>
+  <title>XML Studio - Side-by-Side Diff</title>
   <style>
     :root {
       --bg: #1e2430;
@@ -475,19 +475,19 @@
 
   <header class="top-nav">
     <div class="brand">
-      JSON <span>Studio</span>
+      XML <span>Studio</span>
     </div>
     <div class="nav-tabs">
       <div class="lang-switcher-wrapper">
         <div class="lang-toggle-container">
-          <a href="diff.html" class="active-lang">JSON</a>
-          <a href="xml-diff.html" class="inactive-lang">XML</a>
+          <a href="diff.html" class="inactive-lang">JSON</a>
+          <a href="xml-diff.html" class="active-lang">XML</a>
         </div>
         <p class="lang-label">Language</p>
       </div>
 
-      <a href="index.html" class="tab-link" id="nav-to-viewer">🛠 Viewer & Tree</a>
-      <a href="diff.html" class="tab-link active">⚖️ In-Line Diff Compare</a>
+      <a href="xml-viewer.html" class="tab-link" id="nav-to-viewer">🛠 Viewer & Tree</a>
+      <a href="xml-diff.html" class="tab-link active">⚖️ In-Line Diff Compare</a>
       
       <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Theme">
         <span id="theme-icon">🌙</span>
@@ -500,7 +500,7 @@
     <div class="app-container">
       <div class="pane">
         <div class="header">
-          <span>Original (Left) JSON</span>
+          <span>Original (Left) XML</span>
           <div class="actions">
             <button class="sync-scroll-btn active" id="btn-sync-scroll" title="Synchronize scrolling between both editors">
               <span class="status-dot"></span>
@@ -514,7 +514,7 @@
           <div class="line-numbers" id="diff-lines-left"></div>
           <div class="textarea-container">
             <div id="diff-backdrop-left" class="backdrop-layer"></div>
-            <textarea id="diff-input-left" spellcheck="false" placeholder="Paste original JSON..."></textarea>
+            <textarea id="diff-input-left" spellcheck="false" placeholder="Paste original XML..."></textarea>
           </div>
         </div>
       </div>
@@ -522,7 +522,7 @@
       <div class="pane">
         <div class="header">
           <div style="display:flex; align-items:center; gap:8px;">
-            <span>Modified (Right) JSON</span>
+            <span>Modified (Right) XML</span>
             <div class="diff-filters">
               <button class="filter-btn filter-all active" id="filter-btn-all">All</button>
               <button class="filter-btn filter-add" id="filter-btn-add">+0 Added</button>
@@ -540,7 +540,7 @@
           <div class="line-numbers" id="diff-lines-right"></div>
           <div class="textarea-container">
             <div id="diff-backdrop-right" class="backdrop-layer"></div>
-            <textarea id="diff-input-right" spellcheck="false" placeholder="Paste modified JSON..."></textarea>
+            <textarea id="diff-input-right" spellcheck="false" placeholder="Paste modified XML..."></textarea>
           </div>
         </div>
       </div>
@@ -572,7 +572,7 @@
 
 <script>
   // 1. Broadcast Channels Setup
-  const jsonSyncChannel = new BroadcastChannel('json_sync_channel');
+  const xmlSyncChannel = new BroadcastChannel('xml_sync_channel');
   const themeSyncChannel = new BroadcastChannel('theme_sync_channel');
 
   const themeToggleBtn = document.getElementById('theme-toggle-btn');
@@ -631,7 +631,7 @@
   let activeDiffFilter = 'ALL';
 
   navToViewer.addEventListener('click', () => {
-    localStorage.setItem('shared_json_left', diffInputLeft.value);
+    localStorage.setItem('shared_xml_left', diffInputLeft.value);
   });
 
   btnSyncScroll.addEventListener('click', () => {
@@ -671,10 +671,10 @@
   });
 
   function handleLeftInput(broadcast = true) {
-    localStorage.setItem('shared_json_left', diffInputLeft.value);
+    localStorage.setItem('shared_xml_left', diffInputLeft.value);
     if (broadcast) {
-      jsonSyncChannel.postMessage({
-        type: 'UPDATE_JSON',
+      xmlSyncChannel.postMessage({
+        type: 'UPDATE_XML',
         payload: diffInputLeft.value
       });
     }
@@ -684,9 +684,9 @@
   diffInputLeft.addEventListener('input', () => handleLeftInput(true));
   diffInputRight.addEventListener('input', executeLineByLineDiff);
 
-  // Sync listener from index.html
-  jsonSyncChannel.onmessage = (e) => {
-    if (e.data?.type === 'UPDATE_JSON' && e.data.payload !== diffInputLeft.value) {
+  // Sync listener from xml-viewer.html
+  xmlSyncChannel.onmessage = (e) => {
+    if (e.data?.type === 'UPDATE_XML' && e.data.payload !== diffInputLeft.value) {
       diffInputLeft.value = e.data.payload;
       handleLeftInput(false);
     }
@@ -725,18 +725,15 @@
 
     diffA.forEach((typeA, idxA) => {
       const lineA = linesA[idxA].trim();
-      const matchA = lineA.match(/"([^"]+)":/);
-      if (matchA) {
-        const keyA = matchA[1];
-        diffB.forEach((typeB, idxB) => {
-          const lineB = linesB[idxB].trim();
-          const matchB = lineB.match(/"([^"]+)":/);
-          if (matchB && matchB[1] === keyA) {
-            diffA.set(idxA, 'MOD');
-            diffB.set(idxB, 'MOD');
-          }
-        });
-      }
+      diffB.forEach((typeB, idxB) => {
+        const lineB = linesB[idxB].trim();
+        const tagA = (lineA.match(/^<([a-zA-Z0-9_\-]+)/) || [])[1];
+        const tagB = (lineB.match(/^<([a-zA-Z0-9_\-]+)/) || [])[1];
+        if (tagA && tagB && tagA === tagB) {
+          diffA.set(idxA, 'MOD');
+          diffB.set(idxB, 'MOD');
+        }
+      });
     });
 
     return { diffA, diffB };
@@ -816,6 +813,17 @@
   filterBtnDel.addEventListener('click', () => setDiffFilter('DEL'));
   filterBtnMod.addEventListener('click', () => setDiffFilter('MOD'));
 
+  function formatXml(xml) {
+    let formatted = '', indent = '';
+    const tab = '  ';
+    xml.split(/>\s*</).forEach(node => {
+      if (node.match(/^\/\w/)) indent = indent.substring(tab.length);
+      formatted += indent + '<' + node + '>\r\n';
+      if (node.match(/^<?\w[^>]*[^\/]$/)) indent += tab;
+    });
+    return formatted.substring(1, formatted.length - 3);
+  }
+
   document.getElementById('btn-diff-swap').addEventListener('click', () => {
     const temp = diffInputLeft.value;
     diffInputLeft.value = diffInputRight.value;
@@ -824,17 +832,13 @@
   });
 
   document.getElementById('btn-diff-format-left').addEventListener('click', () => {
-    try {
-      diffInputLeft.value = JSON.stringify(JSON.parse(diffInputLeft.value), null, 2);
-      handleLeftInput(true);
-    } catch {}
+    diffInputLeft.value = formatXml(diffInputLeft.value);
+    handleLeftInput(true);
   });
 
   document.getElementById('btn-diff-format-right').addEventListener('click', () => {
-    try {
-      diffInputRight.value = JSON.stringify(JSON.parse(diffInputRight.value), null, 2);
-      executeLineByLineDiff();
-    } catch {}
+    diffInputRight.value = formatXml(diffInputRight.value);
+    executeLineByLineDiff();
   });
 
   document.getElementById('btn-diff-clear-left').addEventListener('click', () => {
@@ -847,13 +851,13 @@
     executeLineByLineDiff();
   });
 
-  const sharedLeft = localStorage.getItem('shared_json_left');
-  diffInputLeft.value = (sharedLeft && sharedLeft.trim().startsWith('{')) ? sharedLeft : '';
+  const sharedXml = localStorage.getItem('shared_xml_left');
+  diffInputLeft.value = (sharedXml && sharedXml.trim().startsWith('<')) ? sharedXml : '';
   diffInputRight.value = '';
   executeLineByLineDiff();
 
   window.addEventListener('beforeunload', () => {
-    jsonSyncChannel.close();
+    xmlSyncChannel.close();
     themeSyncChannel.close();
   });
 </script>
