@@ -5,11 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>JSON Studio - Viewer & Formatter</title>
   <style>
-    /* =========================================
-       1. THEME DEFINITIONS (CSS VARIABLES)
-       ========================================= */
     :root {
-      /* Default: Grey Theme */
       --bg: #1e2430;
       --panel-bg: #282f3d;
       --panel-header: #323b4c;
@@ -32,10 +28,10 @@
       --hl-text: #0f172a;
       --hl-active-bg: #facc15;
       --hl-active-ring: #eab308;
+      --footer-bg: #0d1117;
     }
 
     body.dark-theme {
-      /* Midnight / Deep Dark Theme */
       --bg: #0b0f19;
       --panel-bg: #111827;
       --panel-header: #151d30;
@@ -54,6 +50,7 @@
       --error-bg: rgba(239, 68, 68, 0.1);
       --error-border: rgba(239, 68, 68, 0.3);
       --error-text: #f87171;
+      --footer-bg: #080b11;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -68,7 +65,6 @@
       transition: background-color 0.2s ease, color 0.2s ease;
     }
 
-    /* Top Navigation Bar */
     .top-nav {
       background: var(--panel-header);
       border-bottom: 1px solid var(--border);
@@ -116,7 +112,6 @@
       box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
 
-    /* Language Switcher Pill */
     .lang-switcher-wrapper {
       display: flex;
       flex-direction: column;
@@ -157,7 +152,6 @@
       letter-spacing: 0.5px;
     }
 
-    /* Theme Switcher Button */
     .theme-toggle-btn {
       background: var(--panel-bg);
       color: var(--text);
@@ -180,8 +174,8 @@
 
     .main-view {
       flex: 1;
-      padding: 14px;
-      height: calc(100vh - 52px);
+      min-height: 0;
+      padding: 12px 14px;
       overflow: hidden;
     }
 
@@ -243,7 +237,6 @@
     button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
     button.primary:hover { background: var(--accent-hover); }
 
-    /* Search Toolbar */
     .search-box {
       display: flex;
       align-items: center;
@@ -282,7 +275,6 @@
     }
     .search-nav-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--text); }
 
-    /* Switch Slider */
     .switch-container {
       display: flex;
       align-items: center;
@@ -321,7 +313,6 @@
     input:checked + .slider { background-color: var(--accent); }
     input:checked + .slider:before { transform: translateX(16px); }
 
-    /* Editor Layout */
     .editor-wrapper {
       flex: 1;
       display: flex;
@@ -405,7 +396,6 @@
       z-index: 2;
     }
 
-    /* Diagnostics Section */
     .editor-footer {
       background: var(--panel-header);
       border-top: 1px solid var(--border);
@@ -440,7 +430,6 @@
     .error-msg { color: var(--text); font-size: 12px; margin-left: 2px; }
     .error-hint { color: var(--error-text); font-size: 11px; margin-left: 2px; }
 
-    /* Tree View Output */
     #tree-pane { display: none; }
     #viewer-output {
       flex: 1;
@@ -469,9 +458,7 @@
       min-width: 100%;
       transition: background-color 0.15s ease;
     }
-    .tree-row:hover {
-      background-color: rgba(255, 255, 255, 0.05);
-    }
+    .tree-row:hover { background-color: rgba(255, 255, 255, 0.05); }
 
     .caret-btn {
       display: inline-flex;
@@ -512,7 +499,6 @@
     .null { color: var(--null-color); font-weight: bold; }
     .comma { color: #94a3b8; }
 
-    /* Highlights */
     #raw-backdrop mark.highlight {
       background-color: rgba(250, 204, 21, 0.3);
       color: transparent !important;
@@ -539,11 +525,73 @@
       outline: 2px solid var(--hl-active-ring);
       box-shadow: 0 0 6px rgba(250, 204, 21, 0.7);
     }
+
+    /* Unified Footer */
+    .app-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 7px 16px;
+      background: var(--footer-bg);
+      border-top: 1px solid var(--border);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .footer-left, .footer-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .engine-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .engine-status code { color: #38bdf8; font-weight: 600; }
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      background: #4ade80;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #4ade80;
+      animation: pulseGlow 2s infinite ease-in-out;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.85); }
+    }
+    .privacy-note strong { color: var(--text); }
+    .dim { color: #64748b; }
+    .metric-tags { display: flex; align-items: center; gap: 6px; color: #64748b; }
+    .sep { color: var(--border); }
+    .dot { color: #475569; font-size: 8px; }
+    .footer-badge {
+      background: rgba(99, 102, 241, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: #a5b4fc;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 10px;
+      letter-spacing: 0.2px;
+      white-space: nowrap;
+    }
+    @media (max-width: 820px) {
+      .metric-tags { display: none; }
+    }
   </style>
 </head>
 <body>
 
-  <!-- Top Navigation Header -->
   <header class="top-nav">
     <div class="brand">
       JSON <span>Studio</span>
@@ -567,11 +615,9 @@
     </div>
   </header>
 
-  <!-- Main View -->
   <main class="main-view">
     <div class="app-container single-pane" id="app-container">
       
-      <!-- Raw JSON Pane -->
       <div class="pane">
         <div class="header">
           <span>Raw JSON Editor</span>
@@ -609,7 +655,6 @@
         </div>
       </div>
 
-      <!-- Tree View Output Pane -->
       <div class="pane" id="tree-pane">
         <div class="header">
           <span>Tree Hierarchy</span>
@@ -632,13 +677,39 @@
     </div>
   </main>
 
+  <footer class="app-footer">
+    <div class="footer-left">
+      <div class="engine-status">
+        <span class="pulse-dot" title="Running locally in browser memory"></span>
+        <code>&gt;_ Local Engine</code>
+      </div>
+      <span class="sep">|</span>
+      <span class="privacy-note">
+        🔒 <strong>100% Client-Side</strong> <span class="dim">— Zero server uploads. Data never leaves your browser.</span>
+      </span>
+    </div>
+    <div class="footer-right">
+      <div class="metric-tags">
+        <span>Zero Latency</span>
+        <span class="dot">•</span>
+        <span>No Tracking</span>
+        <span class="dot">•</span>
+        <span>In-Memory Only</span>
+      </div>
+      <span class="footer-badge">⚡ Private &amp; Offline</span>
+    </div>
+  </footer>
+
 <script>
-  // Theme Toggle System
+  // 1. Broadcast Channels Setup
+  const jsonSyncChannel = new BroadcastChannel('json_sync_channel');
+  const themeSyncChannel = new BroadcastChannel('theme_sync_channel');
+
   const themeToggleBtn = document.getElementById('theme-toggle-btn');
   const themeIcon = document.getElementById('theme-icon');
   const themeLabel = document.getElementById('theme-label');
 
-  function applyTheme(themeName) {
+  function applyTheme(themeName, broadcast = false) {
     if (themeName === 'dark') {
       document.body.classList.add('dark-theme');
       themeIcon.textContent = '☀️';
@@ -649,16 +720,25 @@
       themeLabel.textContent = 'Dark Theme';
     }
     localStorage.setItem('json_studio_theme', themeName);
+
+    if (broadcast) {
+      themeSyncChannel.postMessage({ type: 'SET_THEME', theme: themeName });
+    }
   }
 
   themeToggleBtn.addEventListener('click', () => {
     const isDark = document.body.classList.contains('dark-theme');
-    applyTheme(isDark ? 'grey' : 'dark');
+    applyTheme(isDark ? 'grey' : 'dark', true);
   });
 
-  applyTheme(localStorage.getItem('json_studio_theme') || 'grey');
+  themeSyncChannel.onmessage = (e) => {
+    if (e.data?.type === 'SET_THEME' && e.data.theme) {
+      applyTheme(e.data.theme, false);
+    }
+  };
 
-  // DOM Elements
+  applyTheme(localStorage.getItem('json_studio_theme') || 'grey', false);
+
   const jsonInput = document.getElementById('json-input');
   const lineNumbers = document.getElementById('line-numbers');
   const rawBackdrop = document.getElementById('raw-backdrop');
@@ -700,11 +780,28 @@
     lineNumbers.innerHTML = html;
   }
 
-  jsonInput.addEventListener('input', () => {
+  function handleEditorChange(broadcast = true) {
     validateAndProcess();
     applyRawSearch();
     localStorage.setItem('shared_json_left', jsonInput.value);
-  });
+
+    if (broadcast) {
+      jsonSyncChannel.postMessage({
+        type: 'UPDATE_JSON',
+        payload: jsonInput.value
+      });
+    }
+  }
+
+  jsonInput.addEventListener('input', () => handleEditorChange(true));
+
+  // Receive live updates from diff.html or other open tabs
+  jsonSyncChannel.onmessage = (e) => {
+    if (e.data?.type === 'UPDATE_JSON' && e.data.payload !== jsonInput.value) {
+      jsonInput.value = e.data.payload;
+      handleEditorChange(false);
+    }
+  };
 
   jsonInput.addEventListener('scroll', () => {
     lineNumbers.scrollTop = jsonInput.scrollTop;
@@ -712,7 +809,6 @@
     rawBackdrop.scrollLeft = jsonInput.scrollLeft;
   });
 
-  // Fixed: Tree View Toggle Handler
   function setTreeViewVisibility(show) {
     treeToggle.checked = show;
     if (show) {
@@ -726,13 +822,8 @@
     }
   }
 
-  treeToggle.addEventListener('change', (e) => {
-    setTreeViewVisibility(e.target.checked);
-  });
-
-  btnCloseTree.addEventListener('click', () => {
-    setTreeViewVisibility(false);
-  });
+  treeToggle.addEventListener('change', (e) => setTreeViewVisibility(e.target.checked));
+  btnCloseTree.addEventListener('click', () => setTreeViewVisibility(false));
 
   function scanAllErrors(raw) {
     const errors = [];
@@ -1120,8 +1211,7 @@
     try {
       const obj = JSON.parse(jsonInput.value);
       jsonInput.value = JSON.stringify(obj, null, 2);
-      validateAndProcess();
-      applyRawSearch();
+      handleEditorChange(true);
     } catch { validateAndProcess(); }
   });
 
@@ -1129,8 +1219,7 @@
     try {
       const obj = JSON.parse(jsonInput.value);
       jsonInput.value = JSON.stringify(obj);
-      validateAndProcess();
-      applyRawSearch();
+      handleEditorChange(true);
     } catch { validateAndProcess(); }
   });
 
@@ -1140,8 +1229,7 @@
     treeSearchInput.value = '';
     rawSearchCount.textContent = '0/0';
     treeSearchCount.textContent = '0/0';
-    validateAndProcess();
-    applyRawSearch();
+    handleEditorChange(true);
   });
 
   document.getElementById('btn-expand-all').addEventListener('click', () => {
@@ -1154,32 +1242,17 @@
     });
   });
 
-  // Default JSON Payload
-  const defaultJson = JSON.stringify({
-    "application": "JSON Viewer Suite",
-    "version": 3,
-    "isActive": true,
-    "license": null,
-    "settings": {
-      "theme": "grey",
-      "fontSize": 13,
-      "features": {
-        "liveReload": true,
-        "codeFolding": true,
-        "nestedDepthLimit": 10
-      }
-    },
-    "modules": [
-      { "id": 101, "name": "Parser Engine", "stable": true },
-      { "id": 102, "name": "Tree Visualizer", "stable": true }
-    ]
-  }, null, 2);
-
+  // Init data
   const savedJson = localStorage.getItem('shared_json_left');
-  jsonInput.value = (savedJson && savedJson.trim().startsWith('{')) ? savedJson : defaultJson;
+  jsonInput.value = (savedJson && savedJson.trim().startsWith('{')) ? savedJson : '';
 
   updateLineNumbers();
   validateAndProcess();
+
+  window.addEventListener('beforeunload', () => {
+    jsonSyncChannel.close();
+    themeSyncChannel.close();
+  });
 </script>
 </body>
 </html>
