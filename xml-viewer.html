@@ -370,7 +370,9 @@
       margin: 0;
       border: 0;
       box-sizing: border-box;
-      white-space: pre;
+      white-space: pre !important;
+      word-wrap: normal !important;
+      overflow-wrap: normal !important;
       letter-spacing: 0;
       tab-size: 2;
     }
@@ -823,7 +825,19 @@
       container.className = 'tree-item';
       const row = document.createElement('div');
       row.className = 'tree-row';
-      row.innerHTML = `<span style="color:#64748b; font-style:italic;">&lt;!-- ${escapeXml(xmlNode.nodeValue)} --&gt;</span>`;
+      row.innerHTML = `<span style="color:#64748b; font-style:italic;" data-search-target="true">&lt;!-- ${escapeXml(xmlNode.nodeValue)} --&gt;</span>`;
+      container.appendChild(row);
+      return container;
+    }
+
+    if (xmlNode.nodeType === Node.TEXT_NODE) {
+      const textVal = xmlNode.nodeValue.trim();
+      if (!textVal) return document.createDocumentFragment();
+      const container = document.createElement('div');
+      container.className = 'tree-item';
+      const row = document.createElement('div');
+      row.className = 'tree-row';
+      row.innerHTML = `<span class="xml-val" data-search-target="true">${escapeXml(textVal)}</span>`;
       container.appendChild(row);
       return container;
     }
@@ -837,7 +851,7 @@
       if (xmlNode.attributes && xmlNode.attributes.length > 0) {
         for (let i = 0; i < xmlNode.attributes.length; i++) {
           const attr = xmlNode.attributes[i];
-          attrString += ` <span class="xml-a">${escapeXml(attr.name)}</span>=<span class="xml-v">"${escapeXml(attr.value)}"</span>`;
+          attrString += ` <span class="xml-a" data-search-target="true">${escapeXml(attr.name)}</span>=<span class="xml-v" data-search-target="true">"${escapeXml(attr.value)}"</span>`;
         }
       }
 
@@ -846,6 +860,7 @@
         return n.nodeType === Node.ELEMENT_NODE || n.nodeType === Node.COMMENT_NODE;
       });
 
+      // Self-closing element
       if (childNodes.length === 0) {
         const row = document.createElement('div');
         row.className = 'tree-row';
@@ -854,15 +869,15 @@
         return container;
       }
 
-      const isSimpleText = childNodes.length === 1 && childNodes[0].nodeType === Node.TEXT_NODE;
-      if (isSimpleText) {
+      // Single simple inline text node
+      if (childNodes.length === 1 && childNodes[0].nodeType === Node.TEXT_NODE) {
         const row = document.createElement('div');
         row.className = 'tree-row';
         const textVal = escapeXml(childNodes[0].nodeValue.trim());
         row.innerHTML = `
           <span class="xml-b">&lt;</span><span class="xml-t" data-search-target="true">${escapeXml(tagName)}</span>${attrString}<span class="xml-b">&gt;</span>
           <span class="xml-val" data-search-target="true">${textVal}</span>
-          <span class="xml-b">&lt;/</span><span class="xml-t">${escapeXml(tagName)}</span><span class="xml-b">&gt;</span>
+          <span class="xml-b">&lt;/</span><span class="xml-t" data-search-target="true">${escapeXml(tagName)}</span><span class="xml-b">&gt;</span>
         `;
         container.appendChild(row);
         return container;
@@ -890,31 +905,17 @@
       caret.addEventListener('click', toggleCollapse);
       summaryBadge.addEventListener('click', toggleCollapse);
 
-  caret.setAttribute('role', 'button');
-  caret.setAttribute('tabindex', '0');
-  caret.setAttribute('aria-label', 'Toggle XML branch');
-  summaryBadge.setAttribute('role', 'button');
-  summaryBadge.setAttribute('tabindex', '0');
-
-  const handleKeyToggle = (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      toggleCollapse(e);
-    }
-  };
-  caret.addEventListener('keydown', handleKeyToggle);
-  summaryBadge.addEventListener('keydown', handleKeyToggle);
-
       const childrenWrapper = document.createElement('div');
       childrenWrapper.className = 'tree-children';
 
       childNodes.forEach(child => {
-        childrenWrapper.appendChild(buildXmlTreeNode(child));
+        const renderedChild = buildXmlTreeNode(child);
+        if (renderedChild) childrenWrapper.appendChild(renderedChild);
       });
 
       const closingRow = document.createElement('div');
       closingRow.className = 'tree-row';
-      closingRow.innerHTML = `<span class="xml-b">&lt;/</span><span class="xml-t">${escapeXml(tagName)}</span><span class="xml-b">&gt;</span>`;
+      closingRow.innerHTML = `<span class="xml-b">&lt;/</span><span class="xml-t" data-search-target="true">${escapeXml(tagName)}</span><span class="xml-b">&gt;</span>`;
 
       container.appendChild(row);
       container.appendChild(childrenWrapper);
@@ -922,7 +923,7 @@
       return container;
     }
 
-    return document.createElement('div');
+    return document.createDocumentFragment();
   }
 
   function validateAndProcess() {
@@ -1004,6 +1005,8 @@
     if (rawSearchIndices.length === 0) {
       rawBackdrop.innerHTML = '';
       rawSearchCount.textContent = '0/0';
+      rawBackdrop.scrollTop = (typeof jsonInput !== 'undefined' ? jsonInput : xmlInput).scrollTop;
+      rawBackdrop.scrollLeft = (typeof jsonInput !== 'undefined' ? jsonInput : xmlInput).scrollLeft;
       return;
     }
 
@@ -1046,43 +1049,84 @@
   rawSearchNext.addEventListener('click', () => navigateRawSearch(1));
   rawSearchPrev.addEventListener('click', () => navigateRawSearch(-1));
 
-  function highlightTreeNodes(element, query) {
-    if (!query) return;
-    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-    const targets = element.querySelectorAll('[data-search-target="true"]');
-    targets.forEach(node => {
-      const text = node.textContent;
-      if (regex.test(text)) {
-        node.innerHTML = text.replace(regex, '<mark class="highlight">$1</mark>');
-        let parent = node.closest('.tree-item.collapsed');
-        while (parent) {
-          parent.classList.remove('collapsed');
-          parent = parent.parentElement ? parent.parentElement.closest('.tree-item.collapsed') : null;
+  // 1. Cleans existing highlights without destroying DOM elements/listeners
+function removeTreeHighlights(container) {
+  const marks = container.querySelectorAll('mark.highlight');
+  marks.forEach(mark => {
+    const parent = mark.parentNode;
+    parent.replaceChild(document.createTextNode(mark.textContent), mark);
+    parent.normalize();
+  });
+}
+
+// 2. Safely highlights only raw text nodes inside [data-search-target="true"]
+function highlightTextNodes(element, query) {
+  if (!query) return;
+  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(escapedQuery, 'gi');
+  const targets = element.querySelectorAll('[data-search-target="true"]');
+
+  targets.forEach(target => {
+    const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT, null, false);
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+
+    textNodes.forEach(node => {
+      const val = node.nodeValue;
+      if (!regex.test(val)) return;
+
+      const frag = document.createDocumentFragment();
+      let lastIdx = 0;
+      val.replace(regex, (match, offset) => {
+        if (offset > lastIdx) {
+          frag.appendChild(document.createTextNode(val.slice(lastIdx, offset)));
         }
+        const mark = document.createElement('mark');
+        mark.className = 'highlight';
+        mark.textContent = match;
+        frag.appendChild(mark);
+        lastIdx = offset + match.length;
+      });
+
+      if (lastIdx < val.length) {
+        frag.appendChild(document.createTextNode(val.slice(lastIdx)));
+      }
+      node.parentNode.replaceChild(frag, node);
+
+      // Auto-expand all collapsed parent levels to reveal matched result
+      let parent = target.closest('.tree-item.collapsed');
+      while (parent) {
+        parent.classList.remove('collapsed');
+        parent = parent.parentElement ? parent.parentElement.closest('.tree-item.collapsed') : null;
       }
     });
+  });
+}
+
+// 3. New applyTreeSearch function using the safe highlighting logic
+function applyTreeSearch() {
+  if (!treeToggle.checked) return;
+  removeTreeHighlights(viewerOutput);
+
+  const query = treeSearchInput.value.trim();
+  treeMatches = [];
+  currentTreeMatchIndex = -1;
+
+  if (!query) {
+    treeSearchCount.textContent = '0/0';
+    return;
   }
 
-  function applyTreeSearch() {
-    if (!treeToggle.checked) return;
-    const query = treeSearchInput.value.trim();
-    treeMatches = [];
-    currentTreeMatchIndex = -1;
+  highlightTextNodes(viewerOutput, query);
+  treeMatches = Array.from(viewerOutput.querySelectorAll('mark.highlight'));
 
-    if (!query) {
-      treeSearchCount.textContent = '0/0';
-      return;
-    }
-
-    highlightTreeNodes(viewerOutput, query);
-    treeMatches = Array.from(viewerOutput.querySelectorAll('mark.highlight'));
-    if (treeMatches.length > 0) {
-      currentTreeMatchIndex = 0;
-      updateActiveTreeMatch();
-    } else {
-      treeSearchCount.textContent = '0/0';
-    }
+  if (treeMatches.length > 0) {
+    currentTreeMatchIndex = 0;
+    updateActiveTreeMatch();
+  } else {
+    treeSearchCount.textContent = '0/0';
   }
+}
 
   function updateActiveTreeMatch() {
     if (treeMatches.length === 0) {
