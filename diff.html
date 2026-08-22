@@ -38,6 +38,7 @@
 
   <main class="main-view">
     <div class="app-container">
+      <!-- Left Pane -->
       <div class="pane">
         <div class="header">
           <span>Original (Left) JSON</span>
@@ -46,8 +47,12 @@
               <span class="status-dot"></span>
               <span id="sync-scroll-label">Sync Scroll: ON</span>
             </button>
-            <button id="btn-diff-format-left">Format</button>
-            <button id="btn-diff-clear-left">Clear</button>
+            <button class="icon-btn primary" id="btn-diff-format-left" title="Format Left">
+              <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+            </button>
+            <button class="icon-btn danger" id="btn-diff-clear-left" title="Clear Left">
+              <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+            </button>
           </div>
         </div>
         <div class="editor-wrapper">
@@ -59,6 +64,7 @@
         </div>
       </div>
 
+      <!-- Right Pane -->
       <div class="pane">
         <div class="header">
           <div style="display:flex; align-items:center; gap:8px;">
@@ -72,8 +78,12 @@
           </div>
           <div class="actions">
             <button id="btn-diff-swap">⇄ Swap</button>
-            <button id="btn-diff-format-right">Format</button>
-            <button id="btn-diff-clear-right">Clear</button>
+            <button class="icon-btn primary" id="btn-diff-format-right" title="Format Right">
+              <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+            </button>
+            <button class="icon-btn danger" id="btn-diff-clear-right" title="Clear Right">
+              <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+            </button>
           </div>
         </div>
         <div class="editor-wrapper">
@@ -84,7 +94,6 @@
           </div>
         </div>
       </div>
-    </div>
   </main>
 
   <footer class="app-footer">
@@ -110,6 +119,7 @@
     </div>
   </footer>
 
-<script> src="index.js"</script>
+<script src="diff.js"></script>
+<script src="index.js"></script>
 </body>
 </html>

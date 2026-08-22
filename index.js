@@ -1655,5 +1655,8 @@
     }
   });
 
-  validate();
-  render();
+  // Only execute editor initialization if json-textarea exists on the current page
+  if (document.getElementById('json-textarea')) {
+    validate();
+    render();
+  }

@@ -286,3 +286,76 @@
     jsonSyncChannel.close();
     themeSyncChannel.close();
   });
+  // Helper for animated icon feedback on format buttons
+  function showButtonFeedback(btn, isSuccess) {
+    if (!btn) return;
+    const originalContent = btn.innerHTML;
+    btn.innerHTML = isSuccess 
+      ? '<span style="font-size: 11px; font-weight: bold; color: #34d399;">✓</span>' 
+      : '<span style="font-size: 11px; font-weight: bold; color: #f87171;">✕</span>';
+    setTimeout(() => { btn.innerHTML = originalContent; }, 1400);
+  }
+
+  // Format Left (uses analyzeJSONDiagnostics from index.js if available)
+  document.getElementById('btn-diff-format-left').addEventListener('click', () => {
+    const btn = document.getElementById('btn-diff-format-left');
+    const raw = diffInputLeft.value;
+    if (!raw.trim()) return;
+
+    if (typeof analyzeJSONDiagnostics === 'function') {
+      const diag = analyzeJSONDiagnostics(raw);
+      if (diag && diag.success) {
+        diffInputLeft.value = JSON.stringify(diag.data, null, 2);
+        handleLeftInput(true);
+        showButtonFeedback(btn, true);
+      } else {
+        showButtonFeedback(btn, false);
+      }
+    } else {
+      try {
+        diffInputLeft.value = JSON.stringify(JSON.parse(raw), null, 2);
+        handleLeftInput(true);
+        showButtonFeedback(btn, true);
+      } catch {
+        showButtonFeedback(btn, false);
+      }
+    }
+  });
+
+  // Format Right (uses analyzeJSONDiagnostics from index.js if available)
+  document.getElementById('btn-diff-format-right').addEventListener('click', () => {
+    const btn = document.getElementById('btn-diff-format-right');
+    const raw = diffInputRight.value;
+    if (!raw.trim()) return;
+
+    if (typeof analyzeJSONDiagnostics === 'function') {
+      const diag = analyzeJSONDiagnostics(raw);
+      if (diag && diag.success) {
+        diffInputRight.value = JSON.stringify(diag.data, null, 2);
+        executeLineByLineDiff();
+        showButtonFeedback(btn, true);
+      } else {
+        showButtonFeedback(btn, false);
+      }
+    } else {
+      try {
+        diffInputRight.value = JSON.stringify(JSON.parse(raw), null, 2);
+        executeLineByLineDiff();
+        showButtonFeedback(btn, true);
+      } catch {
+        showButtonFeedback(btn, false);
+      }
+    }
+  });
+
+  // Clear Left
+  document.getElementById('btn-diff-clear-left').addEventListener('click', () => {
+    diffInputLeft.value = '';
+    handleLeftInput(true);
+  });
+
+  // Clear Right
+  document.getElementById('btn-diff-clear-right').addEventListener('click', () => {
+    diffInputRight.value = '';
+    executeLineByLineDiff();
+  });
