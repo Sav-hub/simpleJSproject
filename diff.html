@@ -636,7 +636,10 @@
   let activeDiffFilter = 'ALL';
 
   navToViewer.addEventListener('click', () => {
-    localStorage.setItem('shared_json_left', diffInputLeft.value);
+    const content = diffInputLeft.value.trim();
+    if (content.startsWith('{') || content.startsWith('[')) {
+      localStorage.setItem('shared_json_left', diffInputLeft.value);
+    }
   });
 
   btnSyncScroll.addEventListener('click', () => {

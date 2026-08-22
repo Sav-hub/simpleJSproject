@@ -1029,6 +1029,21 @@
       caret.addEventListener('click', toggleCollapse);
       summaryBadge.addEventListener('click', toggleCollapse);
 
+      caret.setAttribute('role', 'button');
+      caret.setAttribute('tabindex', '0');
+      caret.setAttribute('aria-label', 'Toggle branch');
+      summaryBadge.setAttribute('role', 'button');
+      summaryBadge.setAttribute('tabindex', '0');
+
+      const handleKeyToggle = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggleCollapse(e);
+        }
+      };
+      caret.addEventListener('keydown', handleKeyToggle);
+      summaryBadge.addEventListener('keydown', handleKeyToggle);
+
       const childrenWrapper = document.createElement('div');
       childrenWrapper.className = 'tree-children';
 

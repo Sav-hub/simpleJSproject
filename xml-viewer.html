@@ -890,6 +890,21 @@
       caret.addEventListener('click', toggleCollapse);
       summaryBadge.addEventListener('click', toggleCollapse);
 
+  caret.setAttribute('role', 'button');
+  caret.setAttribute('tabindex', '0');
+  caret.setAttribute('aria-label', 'Toggle XML branch');
+  summaryBadge.setAttribute('role', 'button');
+  summaryBadge.setAttribute('tabindex', '0');
+
+  const handleKeyToggle = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleCollapse(e);
+    }
+  };
+  caret.addEventListener('keydown', handleKeyToggle);
+  summaryBadge.addEventListener('keydown', handleKeyToggle);
+
       const childrenWrapper = document.createElement('div');
       childrenWrapper.className = 'tree-children';
 
@@ -1133,6 +1148,9 @@
       if (el.querySelector('.tree-children')) el.classList.add('collapsed');
     });
   });
+
+  const savedXml = localStorage.getItem('shared_xml_left');
+  xmlInput.value = (savedXml && savedXml.trim().startsWith('<')) ? savedXml : '';
 
   updateLineNumbers();
   validateAndProcess();
