@@ -9,11 +9,28 @@
 <body>
 
   <header class="top-nav">
-    <div class="brand">JSON <span>Studio</span></div>
+  <div class="brand">JSON <span>Studio</span></div>
+
+  <div class="nav-tabs">
+    <!-- Language Switcher Toggle -->
+    <div class="lang-switcher-wrapper">
+      <div class="lang-toggle-container">
+        <a href="index.html" class="active-lang">JSON</a>
+        <a href="xml-viewer.html" class="inactive-lang">XML</a>
+      </div>
+      <p class="lang-label">Language</p>
+    </div>
+
+    <!-- Mode Links -->
+    <a href="index.html" class="tab-link active">🛠 Viewer & Tree</a>
+    <a href="diff.html" class="tab-link">⚖️ In-Line Diff Compare</a>
+
+    <!-- Theme Toggle -->
     <button id="theme-toggle-btn" class="theme-toggle-btn">
       <span id="theme-icon">🌙</span> <span id="theme-label">Dark Theme</span>
     </button>
-  </header>
+  </div>
+</header>
 
   <main class="main-view" id="main-view">
     <div class="drop-overlay" id="drop-overlay">📥 Drop JSON file here to load</div>
@@ -174,7 +191,28 @@
 
     </div>
   </main>
-
+<footer class="app-footer">
+    <div class="footer-left">
+      <div class="engine-status">
+        <span class="pulse-dot" title="Running locally in browser memory"></span>
+        <code>&gt;_ Local Engine</code>
+      </div>
+      <span class="sep">|</span>
+      <span class="privacy-note">
+        🔒 <strong>100% Client-Side</strong> <span class="dim">— Zero server uploads. Data never leaves your browser.</span>
+      </span>
+    </div>
+    <div class="footer-right">
+      <div class="metric-tags">
+        <span>Zero Latency</span>
+        <span class="dot">•</span>
+        <span>No Tracking</span>
+        <span class="dot">•</span>
+        <span>In-Memory Only</span>
+      </div>
+      <span class="footer-badge">⚡ Private &amp; Offline</span>
+    </div>
+  </footer>
 <script src="index.js" ></script>
 </body>
 </html>
