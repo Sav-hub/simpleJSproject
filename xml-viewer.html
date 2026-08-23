@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>XML Studio - Viewer & Formatter</title>
+  <title>XML Studio - Unified Editor</title>
   <link 
     rel="icon" 
     type="image/svg+xml" 
@@ -14,9 +14,7 @@
 <body>
 
   <header class="top-nav">
-    <div class="brand">
-      XML <span>Studio</span>
-    </div>
+    <div class="brand">XML <span>Studio</span></div>
     <div class="nav-tabs">
       <div class="lang-switcher-wrapper">
         <div class="lang-toggle-container">
@@ -27,74 +25,122 @@
       </div>
 
       <a href="xml-viewer.html" class="tab-link active">🛠 Viewer & Tree</a>
-      <a href="xml-diff.html" class="tab-link" id="nav-to-diff">⚖️ In-Line Diff Compare</a>
-      
+      <a href="xml-diff.html" class="tab-link">⚖️ In-Line Diff Compare</a>
+
       <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Theme">
-        <span id="theme-icon">🌙</span>
-        <span id="theme-label">Dark Theme</span>
+        <span id="theme-icon">🌙</span> <span id="theme-label">Dark Theme</span>
       </button>
     </div>
   </header>
 
-  <main class="main-view">
-    <div class="app-container single-pane" id="app-container">
-      
-      <div class="pane">
-        <div class="header">
-          <span>Raw XML Editor</span>
-          <div class="actions">
-            <div class="search-box">
-              <input type="text" id="raw-search-input" class="search-input" placeholder="Search text..." />
-              <span id="raw-search-count" class="search-count">0/0</span>
-              <button id="raw-search-prev" class="search-nav-btn" title="Previous (Shift+Enter)">▲</button>
-              <button id="raw-search-next" class="search-nav-btn" title="Next (Enter)">▼</button>
-            </div>
-
-            <button id="btn-format" class="primary">Format</button>
-            <button id="btn-minify">Minify</button>
-            <button id="btn-clear">Clear</button>
-            
-            <div class="switch-container">
-              <label class="switch">
-                <input type="checkbox" id="tree-toggle" />
-                <span class="slider"></span>
-              </label>
-              <span class="switch-label">Tree View</span>
-            </div>
-          </div>
+  <main class="main-view" id="main-view">
+    <div class="drop-overlay" id="drop-overlay">📥 Drop XML file here to load</div>
+    
+    <div class="pane">
+      <div class="header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span>XML Editor</span>
+          <span id="active-filename" style="font-weight: normal; font-size: 11px; color: var(--text-muted); font-family: monospace;"></span>
         </div>
 
-        <div class="editor-wrapper">
-          <div class="line-numbers" id="line-numbers"></div>
-          <div class="textarea-container">
-            <div id="raw-backdrop"></div>
-            <textarea id="xml-input" spellcheck="false" placeholder="Paste or type XML here..."></textarea>
+        <div class="actions">
+          <input type="file" id="file-input" accept=".xml,text/xml,application/xml,text/plain" style="display: none;" />
+          
+          <button class="icon-btn" id="btn-open" title="Open File">
+            <svg viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/><path d="M2 10h20"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-save" title="Save File (Ctrl+S)">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-copy" title="Copy to Clipboard">
+            <svg viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+          </button>
+
+          <div class="toolbar-divider"></div>
+
+          <!-- Inline Search Capsule -->
+          <div class="inline-search-capsule" id="inline-search-capsule">
+            <input type="text" id="search-input" class="inline-search-input" placeholder="Find..." />
+            <button id="toggle-case" class="search-capsule-btn" title="Match Case (Alt+C)">Aa</button>
+            <button id="toggle-regex" class="search-capsule-btn" title="Regex (Alt+R)">.*</button>
+            <span id="search-count" style="font-size: 10px; color: var(--text-muted); font-family: monospace; min-width: 32px; text-align: center;">0/0</span>
+            <button class="icon-btn" id="search-prev" style="width: 20px; height: 20px;" title="Previous (Shift+Enter)">
+              <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+            </button>
+            <button class="icon-btn" id="search-next" style="width: 20px; height: 20px;" title="Next (Enter)">
+              <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <input type="text" id="replace-input" class="inline-search-input" placeholder="Replace..." style="width: 95px; border-left: 1px solid var(--border); padding-left: 6px; margin-left: 2px;" />
+            <button class="icon-btn" id="btn-replace" style="width: 20px; height: 20px;" title="Replace Next">
+              <svg viewBox="0 0 24 24"><path d="M14 4h7v7"/><path d="m21 4-9 9"/></svg>
+            </button>
+            <button class="icon-btn" id="btn-replace-all" style="width: 20px; height: 20px;" title="Replace All">
+              <svg viewBox="0 0 24 24"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>
+            </button>
+            <button class="icon-btn" id="btn-close-find" style="width: 20px; height: 20px;" title="Close (Esc)">
+              <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
-        </div>
-        <div class="editor-footer" id="editor-footer">
-          <span style="color: var(--text-muted);">Status: Ready</span>
+
+          <button class="icon-btn" id="btn-toggle-find" title="Find & Replace (Ctrl+F / Ctrl+H)">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          </button>
+
+          <div class="toolbar-divider"></div>
+
+          <button class="icon-btn primary" id="btn-format" title="Format / Prettify">
+            <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-minify" title="Minify XML">
+            <svg viewBox="0 0 24 24"><path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="m14 10 7-7"/><path d="m3 21 7-7"/></svg>
+          </button>
+
+          <div class="toolbar-divider"></div>
+
+          <button class="icon-btn" id="btn-expand-all" title="Expand All">
+            <svg viewBox="0 0 24 24"><polyline points="7 15 12 20 17 15"/><polyline points="7 9 12 4 17 9"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-collapse-all" title="Collapse All">
+            <svg viewBox="0 0 24 24"><polyline points="7 20 12 15 17 20"/><polyline points="7 4 12 9 17 4"/></svg>
+          </button>
+
+          <div class="toolbar-divider"></div>
+
+          <button class="icon-btn danger" id="btn-clear" title="Clear Document">
+            <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+          </button>
         </div>
       </div>
 
-      <div class="pane" id="tree-pane">
-        <div class="header">
-          <span>XML Node Hierarchy</span>
-          <div class="actions">
-            <div class="search-box">
-              <input type="text" id="tree-search-input" class="search-input" placeholder="Search tree..." />
-              <span id="tree-search-count" class="search-count">0/0</span>
-              <button id="tree-search-prev" class="search-nav-btn" title="Previous match (Shift+Enter)">▲</button>
-              <button id="tree-search-next" class="search-nav-btn" title="Next match (Enter)">▼</button>
-            </div>
-
-            <button id="btn-expand-all">Expand All</button>
-            <button id="btn-collapse-all">Collapse All</button>
-            <button id="btn-close-tree" style="background:transparent; border:none; color:var(--text-muted); font-size:14px; cursor:pointer;" title="Close Tree View">✕</button>
-          </div>
+      <!-- Synchronized Editor & Gutter Viewport -->
+      <div class="editor-wrapper">
+        <div class="gutter" id="gutter">
+          <div class="gutter-content" id="gutter-content"></div>
         </div>
-        <div id="viewer-output"></div>
+        <div class="viewport" id="viewport">
+          <div class="editor-layer" id="editor-layer"></div>
+          <textarea id="xml-textarea" spellcheck="false" placeholder="Paste, drop, or type raw XML here..."></textarea>
+        </div>
       </div>
 
+      <!-- Telemetry Status Bar -->
+      <div class="status-bar">
+        <div class="status-left">
+          <div class="diagnostic-badge valid" id="diagnostic-badge">
+            <div class="diagnostic-dot"></div>
+            <span id="diagnostic-text">Valid XML</span>
+          </div>
+        </div>
+
+        <div class="status-right">
+          <div class="telemetry-chip interactive" id="tel-cursor" title="Cursor Line & Column">Ln <span>1</span>, Col <span>1</span></div>
+          <div class="telemetry-chip" id="tel-selection" style="display: none;">(<span id="tel-sel-count">0</span> selected)</div>
+          <div class="telemetry-chip" id="tel-lines"><span>0</span> lines</div>
+          <div class="telemetry-chip" id="tel-size"><span>0 B</span></div>
+          <div class="telemetry-chip" id="tel-tags"><span>0</span> tags</div>
+          <div class="telemetry-chip">UTF-8</div>
+        </div>
+      </div>
     </div>
   </main>
 
@@ -121,6 +167,6 @@
     </div>
   </footer>
 
-<script src="xml-viewer.js"></script>
+  <script src="xml-viewer.js"></script>
 </body>
 </html>
