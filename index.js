@@ -1192,18 +1192,82 @@
     }
   });
 
-  document.getElementById('btn-format').addEventListener('click', () => {
-    const diag = analyzeJSONDiagnostics(textarea.value);
-    if (diag && diag.success) {
-      setEditorValue(JSON.stringify(diag.data, null, 2));
-      foldedBlocks.clear();
-      validate();
-      render();
-    } else {
-      validate();
-      toggleDiagnosticsDrawer();
+  // Heuristic Formatter for Malformed / Invalid JSON
+function formatMalformedJson(raw) {
+  let indentLevel = 0;
+  const tab = '  ';
+  let formatted = '';
+  let inString = false;
+  let isEscaped = false;
+
+  for (let i = 0; i < raw.length; i++) {
+    const char = raw[i];
+
+    if (inString) {
+      formatted += char;
+      if (char === '\\' && !isEscaped) {
+        isEscaped = true;
+      } else {
+        if (char === '"' && !isEscaped) inString = false;
+        isEscaped = false;
+      }
+      continue;
     }
-  });
+
+    if (char === '"') {
+      inString = true;
+      formatted += char;
+    } else if (char === '{' || char === '[') {
+      indentLevel++;
+      formatted += char + '\n' + tab.repeat(indentLevel);
+    } else if (char === '}' || char === ']') {
+      indentLevel = Math.max(0, indentLevel - 1);
+      formatted = formatted.trimEnd() + '\n' + tab.repeat(indentLevel) + char;
+    } else if (char === ',') {
+      formatted += char + '\n' + tab.repeat(indentLevel);
+    } else if (char === ':') {
+      formatted += ': ';
+    } else if (char === '\n' || char === '\r') {
+      // Collapse excessive blank lines
+      if (!formatted.endsWith('\n' + tab.repeat(indentLevel))) {
+        formatted += '\n' + tab.repeat(indentLevel);
+      }
+    } else if (char === ' ' || char === '\t') {
+      if (formatted.length > 0 && !/\s$/.test(formatted)) {
+        formatted += ' ';
+      }
+    } else {
+      formatted += char;
+    }
+  }
+
+  // Clean trailing spaces and normalize lines
+  return formatted
+    .split('\n')
+    .map(line => line.trimEnd())
+    .join('\n')
+    .replace(/\n\s*\n\s*\n/g, '\n\n')
+    .trim();
+}
+
+// Updated Format Button Listener in index.js
+document.getElementById('btn-format').addEventListener('click', () => {
+  const raw = textarea.value.trim();
+  if (!raw) return;
+
+  const diag = analyzeJSONDiagnostics(raw);
+  if (diag && diag.success) {
+    // Valid JSON: Standard strict format
+    setEditorValue(JSON.stringify(diag.data, null, 2));
+  } else {
+    // Invalid JSON: Fault-tolerant heuristic beautifier
+    const formatted = formatMalformedJson(raw);
+    setEditorValue(formatted);
+  }
+  foldedBlocks.clear();
+  validate();
+  render();
+});
 
   document.getElementById('btn-minify').addEventListener('click', () => {
     const diag = analyzeJSONDiagnostics(textarea.value);

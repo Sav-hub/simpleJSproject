@@ -280,35 +280,74 @@ textarea.addEventListener('scroll', () => {
   }
 });
 
-// 5. XML Pretty Print Formatter
-function formatXml(xml) {
-  let formatted = '';
-  let indent = '';
-  const tab = '  ';
-  const tokens = xml.replace(/(>)(<)(\/*)/g, '$1\r\n$2$3').split('\r\n');
 
-  tokens.forEach(node => {
-    let padding = 0;
-    if (node.match(/^<\/\w/)) {
-      if (indent.length >= tab.length) indent = indent.substring(tab.length);
-    }
-    if (node.match(/^<?\w[^>]*[^\/]>$/) && !node.startsWith('<?') && !node.startsWith('<!')) {
-      padding = 1;
-    }
-    formatted += indent + node + '\n';
-    if (padding === 1) indent += tab;
-  });
-  return formatted.trim();
-}
 
 function minifyXml(xml) {
   return xml.replace(/>\s+</g, '><').trim();
 }
 
-// 6. Action Listeners
+// Fault-Tolerant XML Formatter (Handles both valid and invalid XML)
+function formatXml(xml) {
+  if (!xml || !xml.trim()) return '';
+
+  let indentLevel = 0;
+  const tab = '  ';
+  const lines = [];
+
+  // Tokenize tag nodes, comments, CDATA, and inter-tag text
+  const tokens = xml
+    .replace(/(<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>)/g, m => '\n' + m.trim() + '\n')
+    .replace(/(>)(<)/g, '$1\n$2')
+    .split('\n');
+
+  for (let rawLine of tokens) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    // CDATA & Comment blocks: Keep content as-is at current level
+    if (line.startsWith('<!--') || line.startsWith('<![CDATA[')) {
+      lines.push(tab.repeat(indentLevel) + line);
+      continue;
+    }
+
+    // Closing Tag: </tag>
+    if (/^<\/[a-zA-Z0-9_\-:]+>/.test(line)) {
+      indentLevel = Math.max(0, indentLevel - 1);
+      lines.push(tab.repeat(indentLevel) + line);
+      continue;
+    }
+
+    // Self-closing Tag or Declarations: <tag/>, <?xml ... ?>, <!DOCTYPE ...>
+    if (/\/>$/.test(line) || line.startsWith('<?') || line.startsWith('<!')) {
+      lines.push(tab.repeat(indentLevel) + line);
+      continue;
+    }
+
+    // Opening Tag with Immediate Close: <tag>content</tag>
+    if (/^<([a-zA-Z0-9_\-:]+)(?:\s+[^>]*?)?>.*<\/\1>$/.test(line)) {
+      lines.push(tab.repeat(indentLevel) + line);
+      continue;
+    }
+
+    // Standard Opening Tag: <tag ...>
+    if (/^<[a-zA-Z0-9_\-:]+(?:\s+[^>]*?)?>$/.test(line)) {
+      lines.push(tab.repeat(indentLevel) + line);
+      indentLevel++;
+      continue;
+    }
+
+    // Malformed / Plain Text Nodes
+    lines.push(tab.repeat(indentLevel) + line);
+  }
+
+  return lines.join('\n');
+}
+
+// Updated Format Button Listener in xml-viewer.js
 document.getElementById('btn-format').addEventListener('click', () => {
   if (!textarea.value.trim()) return;
-  setEditorValue(formatXml(textarea.value));
+  const formatted = formatXml(textarea.value);
+  setEditorValue(formatted);
 });
 
 document.getElementById('btn-minify').addEventListener('click', () => {
