@@ -1,516 +1,519 @@
-  // 1. Broadcast Channels Setup
-  const xmlSyncChannel = new BroadcastChannel('xml_sync_channel');
-  const themeSyncChannel = new BroadcastChannel('theme_sync_channel');
+const xmlSyncChannel = new BroadcastChannel('xml_sync_channel');
+const themeSyncChannel = new BroadcastChannel('theme_sync_channel');
 
-  const themeToggleBtn = document.getElementById('theme-toggle-btn');
-  const themeIcon = document.getElementById('theme-icon');
-  const themeLabel = document.getElementById('theme-label');
+const textarea = document.getElementById('xml-textarea');
+const editorLayer = document.getElementById('editor-layer');
+const gutter = document.getElementById('gutter');
+const gutterContent = document.getElementById('gutter-content');
+const viewport = document.getElementById('viewport');
+const themeToggleBtn = document.getElementById('theme-toggle-btn');
+const activeFilenameEl = document.getElementById('active-filename');
+const fileInput = document.getElementById('file-input');
+const dropOverlay = document.getElementById('drop-overlay');
 
-  function applyTheme(themeName, broadcast = false) {
-    if (themeName === 'dark') {
-      document.body.classList.add('dark-theme');
-      themeIcon.textContent = '☀️';
-      themeLabel.textContent = 'Grey Theme';
-    } else {
-      document.body.classList.remove('dark-theme');
-      themeIcon.textContent = '🌙';
-      themeLabel.textContent = 'Dark Theme';
-    }
-    localStorage.setItem('json_studio_theme', themeName);
+// Telemetry DOM
+const diagnosticBadge = document.getElementById('diagnostic-badge');
+const diagnosticText = document.getElementById('diagnostic-text');
+const telCursor = document.getElementById('tel-cursor');
+const telSelection = document.getElementById('tel-selection');
+const telSelCount = document.getElementById('tel-sel-count');
+const telLines = document.getElementById('tel-lines');
+const telSize = document.getElementById('tel-size');
+const telTags = document.getElementById('tel-tags');
 
-    if (broadcast) {
-      themeSyncChannel.postMessage({ type: 'SET_THEME', theme: themeName });
-    }
-  }
+// Inline Search Capsule DOM
+const inlineSearchCapsule = document.getElementById('inline-search-capsule');
+const searchInput = document.getElementById('search-input');
+const replaceInput = document.getElementById('replace-input');
+const searchCount = document.getElementById('search-count');
+const toggleCaseBtn = document.getElementById('toggle-case');
+const toggleRegexBtn = document.getElementById('toggle-regex');
+const btnToggleFind = document.getElementById('btn-toggle-find');
+const btnCloseFind = document.getElementById('btn-close-find');
 
-  themeToggleBtn.addEventListener('click', () => {
-    const isDark = document.body.classList.contains('dark-theme');
-    applyTheme(isDark ? 'grey' : 'dark', true);
-  });
+let activeFilename = "document.xml";
+let foldedBlocks = new Map();
+let searchMatches = [];
+let rawSearchMatches = [];
+let currentSearchIdx = -1;
+let errorLine = null;
+let dragCounter = 0;
+let isCaseSensitive = false;
+let isRegex = false;
 
-  themeSyncChannel.onmessage = (e) => {
-    if (e.data?.type === 'SET_THEME' && e.data.theme) {
-      applyTheme(e.data.theme, false);
-    }
-  };
-
-  applyTheme(localStorage.getItem('json_studio_theme') || 'grey', false);
-
-  const xmlInput = document.getElementById('xml-input');
-  const lineNumbers = document.getElementById('line-numbers');
-  const rawBackdrop = document.getElementById('raw-backdrop');
-  const treePane = document.getElementById('tree-pane');
-  const appContainer = document.getElementById('app-container');
-  const treeToggle = document.getElementById('tree-toggle');
-  const viewerOutput = document.getElementById('viewer-output');
-  const editorFooter = document.getElementById('editor-footer');
-  const btnCloseTree = document.getElementById('btn-close-tree');
-  const navToDiff = document.getElementById('nav-to-diff');
-
-  const rawSearchInput = document.getElementById('raw-search-input');
-  const rawSearchCount = document.getElementById('raw-search-count');
-  const rawSearchPrev = document.getElementById('raw-search-prev');
-  const rawSearchNext = document.getElementById('raw-search-next');
-  let rawSearchIndices = [];
-  let currentRawMatchIndex = -1;
-
-  const treeSearchInput = document.getElementById('tree-search-input');
-  const treeSearchCount = document.getElementById('tree-search-count');
-  const treeSearchPrev = document.getElementById('tree-search-prev');
-  const treeSearchNext = document.getElementById('tree-search-next');
-  let treeMatches = [];
-  let currentTreeMatchIndex = -1;
-
-  let errorLinesSet = new Set();
-
-  navToDiff.addEventListener('click', () => {
-    localStorage.setItem('shared_xml_left', xmlInput.value);
-  });
-
-  function updateLineNumbers() {
-    const lines = xmlInput.value.split('\n').length;
-    let html = '';
-    for (let i = 1; i <= lines; i++) {
-      const isErr = errorLinesSet.has(i);
-      html += `<div class="${isErr ? 'error-line' : ''}" data-line="${i}">${i}</div>`;
-    }
-    lineNumbers.innerHTML = html;
-  }
-
-  function handleEditorChange(broadcast = true) {
-    validateAndProcess();
-    applyRawSearch();
-    localStorage.setItem('shared_xml_left', xmlInput.value);
-
-    if (broadcast) {
-      xmlSyncChannel.postMessage({
-        type: 'UPDATE_XML',
-        payload: xmlInput.value
-      });
-    }
-  }
-
-  xmlInput.addEventListener('input', () => handleEditorChange(true));
-
-  // Receive live updates from xml-diff.html or other tabs
-  xmlSyncChannel.onmessage = (e) => {
-    if (e.data?.type === 'UPDATE_XML' && e.data.payload !== xmlInput.value) {
-      xmlInput.value = e.data.payload;
-      handleEditorChange(false);
-    }
-  };
-
-  xmlInput.addEventListener('scroll', () => {
-    lineNumbers.scrollTop = xmlInput.scrollTop;
-    rawBackdrop.scrollTop = xmlInput.scrollTop;
-    rawBackdrop.scrollLeft = xmlInput.scrollLeft;
-  });
-
-  function setTreeViewVisibility(show) {
-    treeToggle.checked = show;
-    if (show) {
-      treePane.style.display = 'flex';
-      appContainer.classList.remove('single-pane');
-      validateAndProcess();
-      applyTreeSearch();
-    } else {
-      treePane.style.display = 'none';
-      appContainer.classList.add('single-pane');
-    }
-  }
-
-  treeToggle.addEventListener('change', (e) => setTreeViewVisibility(e.target.checked));
-  btnCloseTree.addEventListener('click', () => setTreeViewVisibility(false));
-
-  function escapeXml(str) {
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
-  function buildXmlTreeNode(xmlNode) {
-    if (xmlNode.nodeType === Node.DOCUMENT_NODE) {
-      return buildXmlTreeNode(xmlNode.documentElement);
-    }
-
-    if (xmlNode.nodeType === Node.COMMENT_NODE) {
-      const container = document.createElement('div');
-      container.className = 'tree-item';
-      const row = document.createElement('div');
-      row.className = 'tree-row';
-      row.innerHTML = `<span style="color:#64748b; font-style:italic;" data-search-target="true">&lt;!-- ${escapeXml(xmlNode.nodeValue)} --&gt;</span>`;
-      container.appendChild(row);
-      return container;
-    }
-
-    if (xmlNode.nodeType === Node.TEXT_NODE) {
-      const textVal = xmlNode.nodeValue.trim();
-      if (!textVal) return document.createDocumentFragment();
-      const container = document.createElement('div');
-      container.className = 'tree-item';
-      const row = document.createElement('div');
-      row.className = 'tree-row';
-      row.innerHTML = `<span class="xml-val" data-search-target="true">${escapeXml(textVal)}</span>`;
-      container.appendChild(row);
-      return container;
-    }
-
-    if (xmlNode.nodeType === Node.ELEMENT_NODE) {
-      const container = document.createElement('div');
-      container.className = 'tree-item';
-
-      const tagName = xmlNode.nodeName;
-      let attrString = '';
-      if (xmlNode.attributes && xmlNode.attributes.length > 0) {
-        for (let i = 0; i < xmlNode.attributes.length; i++) {
-          const attr = xmlNode.attributes[i];
-          attrString += ` <span class="xml-a" data-search-target="true">${escapeXml(attr.name)}</span>=<span class="xml-v" data-search-target="true">"${escapeXml(attr.value)}"</span>`;
-        }
-      }
-
-      const childNodes = Array.from(xmlNode.childNodes).filter(n => {
-        if (n.nodeType === Node.TEXT_NODE) return n.nodeValue.trim().length > 0;
-        return n.nodeType === Node.ELEMENT_NODE || n.nodeType === Node.COMMENT_NODE;
-      });
-
-      // Self-closing element
-      if (childNodes.length === 0) {
-        const row = document.createElement('div');
-        row.className = 'tree-row';
-        row.innerHTML = `<span class="xml-b">&lt;</span><span class="xml-t" data-search-target="true">${escapeXml(tagName)}</span>${attrString}<span class="xml-b"> /&gt;</span>`;
-        container.appendChild(row);
-        return container;
-      }
-
-      // Single simple inline text node
-      if (childNodes.length === 1 && childNodes[0].nodeType === Node.TEXT_NODE) {
-        const row = document.createElement('div');
-        row.className = 'tree-row';
-        const textVal = escapeXml(childNodes[0].nodeValue.trim());
-        row.innerHTML = `
-          <span class="xml-b">&lt;</span><span class="xml-t" data-search-target="true">${escapeXml(tagName)}</span>${attrString}<span class="xml-b">&gt;</span>
-          <span class="xml-val" data-search-target="true">${textVal}</span>
-          <span class="xml-b">&lt;/</span><span class="xml-t" data-search-target="true">${escapeXml(tagName)}</span><span class="xml-b">&gt;</span>
-        `;
-        container.appendChild(row);
-        return container;
-      }
-
-      const row = document.createElement('div');
-      row.className = 'tree-row';
-
-      const caret = document.createElement('span');
-      caret.className = 'caret-btn';
-      caret.textContent = '▼';
-
-      row.innerHTML = `<span class="xml-b">&lt;</span><span class="xml-t" data-search-target="true">${escapeXml(tagName)}</span>${attrString}<span class="xml-b">&gt;</span>`;
-      row.prepend(caret);
-
-      const summaryBadge = document.createElement('span');
-      summaryBadge.className = 'badge-summary';
-      summaryBadge.textContent = `${childNodes.length} nodes &lt;/${tagName}&gt;`;
-      row.appendChild(summaryBadge);
-
-      const toggleCollapse = (e) => {
-        e.stopPropagation();
-        container.classList.toggle('collapsed');
-      };
-      caret.addEventListener('click', toggleCollapse);
-      summaryBadge.addEventListener('click', toggleCollapse);
-
-      const childrenWrapper = document.createElement('div');
-      childrenWrapper.className = 'tree-children';
-
-      childNodes.forEach(child => {
-        const renderedChild = buildXmlTreeNode(child);
-        if (renderedChild) childrenWrapper.appendChild(renderedChild);
-      });
-
-      const closingRow = document.createElement('div');
-      closingRow.className = 'tree-row';
-      closingRow.innerHTML = `<span class="xml-b">&lt;/</span><span class="xml-t" data-search-target="true">${escapeXml(tagName)}</span><span class="xml-b">&gt;</span>`;
-
-      container.appendChild(row);
-      container.appendChild(childrenWrapper);
-      container.appendChild(closingRow);
-      return container;
-    }
-
-    return document.createDocumentFragment();
-  }
-
-  function validateAndProcess() {
-    const raw = xmlInput.value;
-    if (!raw.trim()) {
-      errorLinesSet.clear();
-      updateLineNumbers();
-      editorFooter.className = 'editor-footer';
-      editorFooter.innerHTML = '<span style="color: var(--text-muted);">Status: Ready (Empty document)</span>';
-      viewerOutput.innerHTML = '<span style="color: var(--text-muted);">No XML data to display.</span>';
-      return;
-    }
-
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(raw, "application/xml");
-    const parseError = xmlDoc.querySelector("parsererror");
-
-    if (parseError) {
-      errorLinesSet = new Set([1]);
-      updateLineNumbers();
-      editorFooter.className = 'editor-footer has-error';
-      editorFooter.innerHTML = `<div class="error-item"><span class="error-tag">XML Error</span><span class="error-msg">${escapeXml(parseError.textContent.slice(0, 180))}...</span></div>`;
-      if (treeToggle.checked) {
-        viewerOutput.innerHTML = `<div style="color: #f87171; padding: 12px; border: 1px solid var(--error-border);">Invalid XML. Fix syntax errors above to render tree.</div>`;
-      }
-    } else {
-      errorLinesSet.clear();
-      updateLineNumbers();
-      editorFooter.className = 'editor-footer';
-      editorFooter.innerHTML = `<span style="color: var(--xml-text); font-weight: 600;">✓ Valid XML</span>`;
-      if (treeToggle.checked) {
-        viewerOutput.innerHTML = '';
-        viewerOutput.appendChild(buildXmlTreeNode(xmlDoc.documentElement));
-        applyTreeSearch();
-      }
-    }
-  }
-
-  function formatXml(xml) {
-    let formatted = '', indent = '';
-    const tab = '  ';
-    xml.split(/>\s*</).forEach(node => {
-      if (node.match(/^\/\w/)) indent = indent.substring(tab.length);
-      formatted += indent + '<' + node + '>\r\n';
-      if (node.match(/^<?\w[^>]*[^\/]$/)) indent += tab;
-    });
-    return formatted.substring(1, formatted.length - 3);
-  }
-
-  function applyRawSearch() {
-    const query = rawSearchInput.value;
-    const text = xmlInput.value;
-    rawSearchIndices = [];
-    currentRawMatchIndex = -1;
-
-    if (!query) {
-      rawBackdrop.innerHTML = '';
-      rawSearchCount.textContent = '0/0';
-      return;
-    }
-
-    const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-    let match;
-    while ((match = regex.exec(text)) !== null) {
-      rawSearchIndices.push({ start: match.index, end: match.index + match[0].length });
-    }
-
-    if (rawSearchIndices.length > 0) {
-      currentRawMatchIndex = 0;
-      updateRawHighlights();
-    } else {
-      rawBackdrop.innerHTML = escapeXml(text);
-      rawSearchCount.textContent = '0/0';
-    }
-  }
-
-  function updateRawHighlights() {
-    const text = xmlInput.value;
-    if (rawSearchIndices.length === 0) {
-      rawBackdrop.innerHTML = '';
-      rawSearchCount.textContent = '0/0';
-      rawBackdrop.scrollTop = (typeof jsonInput !== 'undefined' ? jsonInput : xmlInput).scrollTop;
-      rawBackdrop.scrollLeft = (typeof jsonInput !== 'undefined' ? jsonInput : xmlInput).scrollLeft;
-      return;
-    }
-
-    let html = '';
-    let lastIndex = 0;
-
-    rawSearchIndices.forEach((pos, idx) => {
-      html += escapeXml(text.substring(lastIndex, pos.start));
-      const matchText = escapeXml(text.substring(pos.start, pos.end));
-      const isActive = idx === currentRawMatchIndex;
-      html += `<mark class="highlight ${isActive ? 'active-match' : ''}">${matchText}</mark>`;
-      lastIndex = pos.end;
-    });
-    html += escapeXml(text.substring(lastIndex));
-    rawBackdrop.innerHTML = html;
-    rawSearchCount.textContent = `${currentRawMatchIndex + 1}/${rawSearchIndices.length}`;
-
-    if (currentRawMatchIndex >= 0) {
-      const active = rawSearchIndices[currentRawMatchIndex];
-      const lineNumber = text.substring(0, active.start).split('\n').length;
-      xmlInput.scrollTop = Math.max(0, (lineNumber - 4) * 19.5);
-      lineNumbers.scrollTop = xmlInput.scrollTop;
-      rawBackdrop.scrollTop = xmlInput.scrollTop;
-    }
-  }
-
-  function navigateRawSearch(direction) {
-    if (rawSearchIndices.length === 0) return;
-    currentRawMatchIndex = (currentRawMatchIndex + direction + rawSearchIndices.length) % rawSearchIndices.length;
-    updateRawHighlights();
-  }
-
-  rawSearchInput.addEventListener('input', applyRawSearch);
-  rawSearchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      navigateRawSearch(e.shiftKey ? -1 : 1);
-    }
-  });
-  rawSearchNext.addEventListener('click', () => navigateRawSearch(1));
-  rawSearchPrev.addEventListener('click', () => navigateRawSearch(-1));
-
-  // 1. Cleans existing highlights without destroying DOM elements/listeners
-function removeTreeHighlights(container) {
-  const marks = container.querySelectorAll('mark.highlight');
-  marks.forEach(mark => {
-    const parent = mark.parentNode;
-    parent.replaceChild(document.createTextNode(mark.textContent), mark);
-    parent.normalize();
-  });
+// 1. Theme Configuration
+function applyTheme(isDark) {
+  document.body.classList.toggle('dark-theme', isDark);
+  document.getElementById('theme-icon').textContent = isDark ? '☀️' : '🌙';
+  document.getElementById('theme-label').textContent = isDark ? 'Grey Theme' : 'Dark Theme';
+  localStorage.setItem('json_studio_theme', isDark ? 'dark' : 'grey');
 }
 
-// 2. Safely highlights only raw text nodes inside [data-search-target="true"]
-function highlightTextNodes(element, query) {
-  if (!query) return;
-  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(escapedQuery, 'gi');
-  const targets = element.querySelectorAll('[data-search-target="true"]');
+themeToggleBtn.addEventListener('click', () => {
+  const isDark = !document.body.classList.contains('dark-theme');
+  applyTheme(isDark);
+  themeSyncChannel.postMessage({ type: 'SET_THEME', theme: isDark ? 'dark' : 'grey' });
+});
 
-  targets.forEach(target => {
-    const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT, null, false);
-    const textNodes = [];
-    while (walker.nextNode()) textNodes.push(walker.currentNode);
+themeSyncChannel.onmessage = (e) => {
+  if (e.data?.type === 'SET_THEME') applyTheme(e.data.theme === 'dark');
+};
+applyTheme(localStorage.getItem('json_studio_theme') === 'dark');
 
-    textNodes.forEach(node => {
-      const val = node.nodeValue;
-      if (!regex.test(val)) return;
-
-      const frag = document.createDocumentFragment();
-      let lastIdx = 0;
-      val.replace(regex, (match, offset) => {
-        if (offset > lastIdx) {
-          frag.appendChild(document.createTextNode(val.slice(lastIdx, offset)));
-        }
-        const mark = document.createElement('mark');
-        mark.className = 'highlight';
-        mark.textContent = match;
-        frag.appendChild(mark);
-        lastIdx = offset + match.length;
-      });
-
-      if (lastIdx < val.length) {
-        frag.appendChild(document.createTextNode(val.slice(lastIdx)));
-      }
-      node.parentNode.replaceChild(frag, node);
-
-      // Auto-expand all collapsed parent levels to reveal matched result
-      let parent = target.closest('.tree-item.collapsed');
-      while (parent) {
-        parent.classList.remove('collapsed');
-        parent = parent.parentElement ? parent.parentElement.closest('.tree-item.collapsed') : null;
-      }
-    });
-  });
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// 3. New applyTreeSearch function using the safe highlighting logic
-function applyTreeSearch() {
-  if (!treeToggle.checked) return;
-  removeTreeHighlights(viewerOutput);
+function setEditorValue(newVal, newFilename = null) {
+  textarea.value = newVal;
+  if (newFilename) {
+    activeFilename = newFilename;
+    activeFilenameEl.textContent = `(${newFilename})`;
+  }
+  localStorage.setItem('shared_xml_left', newVal);
+  xmlSyncChannel.postMessage({ type: 'UPDATE_XML', payload: newVal });
+  validate();
+  render();
+}
 
-  const query = treeSearchInput.value.trim();
-  treeMatches = [];
-  currentTreeMatchIndex = -1;
-
-  if (!query) {
-    treeSearchCount.textContent = '0/0';
+// 2. Native DOMParser Validation & Telemetry (No Custom Logic)
+function validate() {
+  const raw = textarea.value;
+  if (!raw.trim()) {
+    errorLine = null;
+    diagnosticBadge.className = 'diagnostic-badge valid';
+    diagnosticText.textContent = 'Empty Document';
+    telTags.innerHTML = '<span>0</span> tags';
     return;
   }
 
-  highlightTextNodes(viewerOutput, query);
-  treeMatches = Array.from(viewerOutput.querySelectorAll('mark.highlight'));
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(raw, "application/xml");
+  const parserErr = doc.querySelector("parsererror");
 
-  if (treeMatches.length > 0) {
-    currentTreeMatchIndex = 0;
-    updateActiveTreeMatch();
+  if (parserErr) {
+    errorLine = 1;
+    diagnosticBadge.className = 'diagnostic-badge error';
+    diagnosticText.textContent = 'XML Syntax Error';
+    telTags.innerHTML = '<span>—</span> tags';
   } else {
-    treeSearchCount.textContent = '0/0';
+    errorLine = null;
+    diagnosticBadge.className = 'diagnostic-badge valid';
+    diagnosticText.textContent = 'Valid XML';
+    const tagCount = doc.querySelectorAll('*').length;
+    telTags.innerHTML = `<span>${tagCount}</span> tags`;
   }
 }
 
-  function updateActiveTreeMatch() {
-    if (treeMatches.length === 0) {
-      treeSearchCount.textContent = '0/0';
-      return;
-    }
-    treeMatches.forEach((el, i) => {
-      if (i === currentTreeMatchIndex) {
-        el.classList.add('active-match');
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else {
-        el.classList.remove('active-match');
+function updateTelemetry() {
+  const val = textarea.value;
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+
+  const linesBefore = val.substring(0, start).split('\n');
+  const curLine = linesBefore.length;
+  const curCol = linesBefore[linesBefore.length - 1].length + 1;
+  telCursor.innerHTML = `Ln <span>${curLine}</span>, Col <span>${curCol}</span>`;
+
+  if (start !== end) {
+    telSelection.style.display = 'inline-flex';
+    telSelCount.textContent = Math.abs(end - start);
+  } else {
+    telSelection.style.display = 'none';
+  }
+
+  const totalLines = val.split('\n').length;
+  telLines.innerHTML = `<span>${val ? totalLines : 0}</span> lines`;
+
+  const bytes = new Blob([val]).size;
+  let formattedSize = bytes + ' B';
+  if (bytes >= 1024 * 1024) formattedSize = (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  else if (bytes >= 1024) formattedSize = (bytes / 1024).toFixed(1) + ' KB';
+  telSize.innerHTML = `<span>${formattedSize}</span>`;
+}
+
+// 3. Robust XML Lexer & Block Folding Range Scanner
+function parseEditorLines(rawText) {
+  const lines = rawText.split('\n');
+  const lineStructures = [];
+  const stack = [];
+  const foldRanges = [];
+
+  lines.forEach((line, i) => {
+    // 3A. Scan for multi-line block folding ranges
+    const tagMatcher = /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<(\/)?([a-zA-Z0-9_\-:]+)((?:\s+[^>]*?)?)(\/)?>/g;
+    let match;
+    while ((match = tagMatcher.exec(line)) !== null) {
+      const [full, isClose, tagName, , isSelfClosing] = match;
+      if (full.startsWith('<!--') || full.startsWith('<![CDATA[') || full.startsWith('<?') || full.startsWith('<!')) {
+        continue;
       }
-    });
-    treeSearchCount.textContent = `${currentTreeMatchIndex + 1}/${treeMatches.length}`;
-  }
+      if (isSelfClosing) continue;
 
-  function navigateTreeSearch(direction) {
-    if (treeMatches.length === 0) return;
-    currentTreeMatchIndex = (currentTreeMatchIndex + direction + treeMatches.length) % treeMatches.length;
-    updateActiveTreeMatch();
-  }
+      if (isClose) {
+        if (stack.length > 0 && stack[stack.length - 1].tag === tagName) {
+          const start = stack.pop();
+          if (start.line !== i) {
+            foldRanges.push({ start: start.line, end: i, tag: tagName });
+          }
+        }
+      } else {
+        stack.push({ tag: tagName, line: i });
+      }
+    }
 
-  treeSearchInput.addEventListener('input', () => {
-    if (treeToggle.checked) validateAndProcess();
+    // 3B. Tokenize line into syntax-highlighted HTML spans
+    const tokenRegex = /(<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<\?[^>]*?\?>|<\/?[a-zA-Z0-9_\-:]+|[a-zA-Z0-9_\-:]+(?=\s*=)|="[^"]*"|='[^']*'|\/?>|>|&[a-zA-Z0-9#]+;)/g;
+    let formattedHtml = '';
+    let lastIndex = 0;
+    let tok;
+
+    while ((tok = tokenRegex.exec(line)) !== null) {
+      formattedHtml += escapeHtml(line.substring(lastIndex, tok.index));
+      const str = tok[0];
+
+      if (str.startsWith('<!--')) {
+        formattedHtml += `<span class="xml-comment">${escapeHtml(str)}</span>`;
+      } else if (str.startsWith('<![CDATA[')) {
+        formattedHtml += `<span class="xml-cdata">${escapeHtml(str)}</span>`;
+      } else if (str.startsWith('</') || str.startsWith('<')) {
+        formattedHtml += `<span class="xml-punct">&lt;${str.startsWith('</') ? '/' : ''}</span><span class="xml-tag">${escapeHtml(str.replace(/^<\/?/, ''))}</span>`;
+      } else if (str === '>' || str === '/>' || str.startsWith('<?') || str.endsWith('?>')) {
+        formattedHtml += `<span class="xml-punct">${escapeHtml(str)}</span>`;
+      } else if (str.startsWith('=')) {
+        formattedHtml += `<span class="xml-punct">=</span><span class="xml-val">${escapeHtml(str.slice(1))}</span>`;
+      } else if (str.startsWith('&')) {
+        formattedHtml += `<span class="xml-punct">${escapeHtml(str)}</span>`;
+      } else {
+        formattedHtml += `<span class="xml-attr">${escapeHtml(str)}</span>`;
+      }
+      lastIndex = tokenRegex.lastIndex;
+    }
+    formattedHtml += escapeHtml(line.substring(lastIndex));
+
+    lineStructures.push({ raw: line, html: formattedHtml || '&nbsp;' });
   });
 
-  treeSearchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      navigateTreeSearch(e.shiftKey ? -1 : 1);
+  return { lineStructures, foldRanges };
+}
+
+// 4. Render Engine & True 1:1 Synchronized Layout
+function render() {
+  const raw = textarea.value;
+  const { lineStructures, foldRanges } = parseEditorLines(raw);
+
+  const activeStartLines = new Set(foldRanges.map(f => f.start));
+  for (const key of foldedBlocks.keys()) {
+    if (!activeStartLines.has(key)) foldedBlocks.delete(key);
+  }
+
+  const foldMap = new Map();
+  foldRanges.forEach(f => foldMap.set(f.start, f));
+
+  const hiddenLines = new Set();
+  foldedBlocks.forEach((end, start) => {
+    for (let i = start + 1; i <= end; i++) hiddenLines.add(i);
+  });
+
+  let gutterHtml = '';
+  let editorHtml = '';
+  let visibleLineCount = 0;
+
+  lineStructures.forEach((l, idx) => {
+    const isFolded = foldedBlocks.has(idx);
+    const isHidden = hiddenLines.has(idx);
+    const foldInfo = foldMap.get(idx);
+    const isErr = errorLine === (idx + 1);
+
+    if (!isHidden) {
+      visibleLineCount++;
+      gutterHtml += `
+        <div class="gutter-row ${isErr ? 'error-line' : ''}" data-line="${idx + 1}">
+          <span class="line-num">${idx + 1}</span>
+          ${foldInfo ? `<span class="fold-btn ${isFolded ? 'folded' : ''}" onclick="toggleFold(${idx}, ${foldInfo.end})">▼</span>` : '<span style="width:14px"></span>'}
+        </div>
+      `;
+
+      let foldBadge = '';
+      if (isFolded && foldInfo) {
+        const count = foldInfo.end - foldInfo.start;
+        foldBadge = `<span class="fold-badge" onclick="toggleFold(${idx}, ${foldInfo.end})">... ${count} lines hidden &lt;/${foldInfo.tag}&gt;</span>`;
+      }
+
+      editorHtml += `<div class="code-line" id="code-line-${idx}">${l.html}${foldBadge}</div>`;
     }
   });
 
-  treeSearchNext.addEventListener('click', () => navigateTreeSearch(1));
-  treeSearchPrev.addEventListener('click', () => navigateTreeSearch(-1));
+  const maxDigits = String(lineStructures.length).length;
+  gutter.style.width = `${Math.max(52, maxDigits * 8 + 26)}px`;
+  gutterContent.innerHTML = gutterHtml;
+  editorLayer.innerHTML = editorHtml;
 
-  document.getElementById('btn-format').addEventListener('click', () => {
-    xmlInput.value = formatXml(xmlInput.value);
-    handleEditorChange(true);
+  const totalLines = foldedBlocks.size > 0 ? visibleLineCount : lineStructures.length;
+  const exactContentHeight = totalLines * 22 + 24;
+  const targetHeight = Math.max(exactContentHeight, viewport.clientHeight);
+  const targetWidth = Math.max(editorLayer.scrollWidth, viewport.clientWidth);
+
+  textarea.style.height = `${targetHeight}px`;
+  textarea.style.width = `${targetWidth}px`;
+  editorLayer.style.width = `${targetWidth}px`;
+  gutterContent.style.height = `${targetHeight}px`;
+
+  updateTelemetry();
+  applySearch();
+}
+
+window.toggleFold = function(start, end) {
+  if (foldedBlocks.has(start)) foldedBlocks.delete(start);
+  else foldedBlocks.set(start, end);
+  render();
+};
+
+viewport.addEventListener('scroll', () => { gutter.scrollTop = viewport.scrollTop; }, { passive: true });
+textarea.addEventListener('scroll', () => {
+  if (textarea.scrollTop !== 0 || textarea.scrollLeft !== 0) {
+    viewport.scrollTop += textarea.scrollTop;
+    viewport.scrollLeft += textarea.scrollLeft;
+    textarea.scrollTop = 0;
+    textarea.scrollLeft = 0;
+    gutter.scrollTop = viewport.scrollTop;
+  }
+});
+
+// 5. XML Pretty Print Formatter
+function formatXml(xml) {
+  let formatted = '';
+  let indent = '';
+  const tab = '  ';
+  const tokens = xml.replace(/(>)(<)(\/*)/g, '$1\r\n$2$3').split('\r\n');
+
+  tokens.forEach(node => {
+    let padding = 0;
+    if (node.match(/^<\/\w/)) {
+      if (indent.length >= tab.length) indent = indent.substring(tab.length);
+    }
+    if (node.match(/^<?\w[^>]*[^\/]>$/) && !node.startsWith('<?') && !node.startsWith('<!')) {
+      padding = 1;
+    }
+    formatted += indent + node + '\n';
+    if (padding === 1) indent += tab;
   });
+  return formatted.trim();
+}
 
-  document.getElementById('btn-minify').addEventListener('click', () => {
-    xmlInput.value = xmlInput.value.replace(/>\s+</g, '><').trim();
-    handleEditorChange(true);
-  });
+function minifyXml(xml) {
+  return xml.replace(/>\s+</g, '><').trim();
+}
 
-  document.getElementById('btn-clear').addEventListener('click', () => {
-    xmlInput.value = '';
-    rawSearchInput.value = '';
-    treeSearchInput.value = '';
-    rawSearchCount.textContent = '0/0';
-    treeSearchCount.textContent = '0/0';
-    handleEditorChange(true);
-  });
+// 6. Action Listeners
+document.getElementById('btn-format').addEventListener('click', () => {
+  if (!textarea.value.trim()) return;
+  setEditorValue(formatXml(textarea.value));
+});
 
-  document.getElementById('btn-expand-all').addEventListener('click', () => {
-    document.querySelectorAll('#viewer-output .tree-item.collapsed').forEach(el => el.classList.remove('collapsed'));
-  });
+document.getElementById('btn-minify').addEventListener('click', () => {
+  if (!textarea.value.trim()) return;
+  setEditorValue(minifyXml(textarea.value));
+});
 
-  document.getElementById('btn-collapse-all').addEventListener('click', () => {
-    document.querySelectorAll('#viewer-output .tree-item').forEach(el => {
-      if (el.querySelector('.tree-children')) el.classList.add('collapsed');
+document.getElementById('btn-clear').addEventListener('click', () => setEditorValue('', 'untitled.xml'));
+document.getElementById('btn-expand-all').addEventListener('click', () => { foldedBlocks.clear(); render(); });
+document.getElementById('btn-collapse-all').addEventListener('click', () => {
+  const { foldRanges } = parseEditorLines(textarea.value);
+  foldRanges.forEach(f => foldedBlocks.set(f.start, f.end));
+  render();
+});
+
+// File I/O
+document.getElementById('btn-open').addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => { setEditorValue(evt.target.result, file.name); fileInput.value = ''; };
+  reader.readAsText(file);
+});
+
+document.getElementById('btn-save').addEventListener('click', () => {
+  const blob = new Blob([textarea.value], { type: 'application/xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = activeFilename || 'document.xml';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('btn-copy').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-copy');
+  const oldSvg = btn.innerHTML;
+  try {
+    await navigator.clipboard.writeText(textarea.value);
+    btn.innerHTML = '<span style="font-size: 11px; font-weight: bold; color: #34d399;">✓</span>';
+  } catch {
+    btn.innerHTML = '<span style="font-size: 11px; font-weight: bold; color: #f87171;">✕</span>';
+  }
+  setTimeout(() => { btn.innerHTML = oldSvg; }, 1400);
+});
+
+// Drag and Drop
+const mainView = document.getElementById('main-view');
+mainView.addEventListener('dragenter', (e) => { e.preventDefault(); dragCounter++; dropOverlay.classList.add('active'); });
+mainView.addEventListener('dragleave', (e) => { e.preventDefault(); dragCounter--; if (dragCounter <= 0) { dragCounter = 0; dropOverlay.classList.remove('active'); } });
+mainView.addEventListener('dragover', (e) => e.preventDefault());
+mainView.addEventListener('drop', (e) => {
+  e.preventDefault(); dragCounter = 0; dropOverlay.classList.remove('active');
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = (evt) => setEditorValue(evt.target.result, file.name);
+    reader.readAsText(file);
+  }
+});
+
+// 7. Find & Replace System
+function openSearch(focusReplace = false) {
+  inlineSearchCapsule.classList.add('active');
+  btnToggleFind.classList.add('active');
+  if (focusReplace) replaceInput.focus();
+  else searchInput.focus();
+  applySearch();
+}
+
+function closeSearch() {
+  inlineSearchCapsule.classList.remove('active');
+  btnToggleFind.classList.remove('active');
+  searchMatches = [];
+  rawSearchMatches = [];
+  currentSearchIdx = -1;
+  render();
+  textarea.focus();
+}
+
+function getSearchRegExp(global = false) {
+  if (!inlineSearchCapsule.classList.contains('active')) return null;
+  const query = searchInput.value;
+  if (!query) return null;
+  let flags = global ? 'g' : '';
+  if (!isCaseSensitive) flags += 'i';
+  try {
+    return isRegex ? new RegExp(query, flags) : new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+  } catch {
+    return null;
+  }
+}
+
+function applySearch() {
+  const regexGlobal = getSearchRegExp(true);
+  const regexTest = getSearchRegExp(false);
+  if (!regexGlobal || !regexTest) {
+    searchCount.textContent = '0/0';
+    searchMatches = [];
+    return;
+  }
+
+  const lines = editorLayer.querySelectorAll('.code-line');
+  searchMatches = [];
+
+  lines.forEach(line => {
+    const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT, null, false);
+    const textNodes = [];
+    while (walker.nextNode()) {
+      if (!walker.currentNode.parentElement.closest('.fold-badge')) textNodes.push(walker.currentNode);
+    }
+
+    textNodes.forEach(node => {
+      const val = node.nodeValue;
+      if (!regexTest.test(val)) return;
+
+      const frag = document.createDocumentFragment();
+      let last = 0;
+      val.replace(getSearchRegExp(true), (mText, offset) => {
+        if (offset > last) frag.appendChild(document.createTextNode(val.slice(last, offset)));
+        const mark = document.createElement('mark');
+        mark.className = 'highlight';
+        mark.textContent = mText;
+        frag.appendChild(mark);
+        last = offset + mText.length;
+      });
+      if (last < val.length) frag.appendChild(document.createTextNode(val.slice(last)));
+      node.parentNode.replaceChild(frag, node);
     });
   });
 
-  const savedXml = localStorage.getItem('shared_xml_left');
-  xmlInput.value = (savedXml && savedXml.trim().startsWith('<')) ? savedXml : '';
+  searchMatches = Array.from(editorLayer.querySelectorAll('mark.highlight'));
+  if (searchMatches.length > 0) {
+    if (currentSearchIdx >= searchMatches.length || currentSearchIdx < 0) currentSearchIdx = 0;
+    searchMatches.forEach((m, i) => m.classList.toggle('active-match', i === currentSearchIdx));
+    searchCount.textContent = `${currentSearchIdx + 1}/${searchMatches.length}`;
+  } else {
+    searchCount.textContent = '0/0';
+  }
+}
 
-  updateLineNumbers();
-  validateAndProcess();
+function stepSearch(dir) {
+  if (!searchMatches.length) return;
+  currentSearchIdx = (currentSearchIdx + dir + searchMatches.length) % searchMatches.length;
+  applySearch();
+}
 
-  window.addEventListener('beforeunload', () => {
-    xmlSyncChannel.close();
-    themeSyncChannel.close();
-  });
+btnToggleFind.addEventListener('click', () => {
+  if (inlineSearchCapsule.classList.contains('active')) closeSearch();
+  else openSearch();
+});
+btnCloseFind.addEventListener('click', closeSearch);
+searchInput.addEventListener('input', () => { currentSearchIdx = 0; render(); });
+toggleCaseBtn.addEventListener('click', () => { isCaseSensitive = !isCaseSensitive; toggleCaseBtn.classList.toggle('active', isCaseSensitive); applySearch(); });
+toggleRegexBtn.addEventListener('click', () => { isRegex = !isRegex; toggleRegexBtn.classList.toggle('active', isRegex); applySearch(); });
+document.getElementById('search-next').addEventListener('click', () => stepSearch(1));
+document.getElementById('search-prev').addEventListener('click', () => stepSearch(-1));
+
+document.getElementById('btn-replace').addEventListener('click', () => {
+  const regex = getSearchRegExp(false);
+  if (!regex) return;
+  textarea.value = textarea.value.replace(regex, replaceInput.value);
+  setEditorValue(textarea.value);
+});
+
+document.getElementById('btn-replace-all').addEventListener('click', () => {
+  const regex = getSearchRegExp(true);
+  if (!regex) return;
+  textarea.value = textarea.value.replace(regex, replaceInput.value);
+  setEditorValue(textarea.value);
+});
+
+// 8. Smart XML Caret & Indentation
+textarea.addEventListener('keydown', (e) => {
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const val = textarea.value;
+
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    textarea.setRangeText('  ', start, end, 'end');
+    textarea.selectionStart = textarea.selectionEnd = start + 2;
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const before = val.substring(0, start);
+    const lineStart = before.lastIndexOf('\n') + 1;
+    const currentLine = before.substring(lineStart);
+    const currentIndent = (currentLine.match(/^\s*/) || [''])[0];
+    const insertText = '\n' + currentIndent;
+    textarea.setRangeText(insertText, start, end, 'end');
+    textarea.selectionStart = textarea.selectionEnd = start + insertText.length;
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+});
+
+// Shortcuts & Input Listeners
+textarea.addEventListener('input', () => { validate(); render(); });
+['click', 'keyup', 'focus', 'select'].forEach(evt => textarea.addEventListener(evt, () => { updateTelemetry(); render(); }));
+
+// Initialization
+const initialXml = localStorage.getItem('shared_xml_left') || '<root>\n  <item id="1">Hello XML</item>\n</root>';
+textarea.value = initialXml;
+validate();
+render();
