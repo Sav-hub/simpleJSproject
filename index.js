@@ -894,37 +894,36 @@
     }
   });
 
-  viewport.addEventListener('scroll', () => {
-    gutter.scrollTop = viewport.scrollTop;
-  }, { passive: true });
+// Synchronize gutter instantly with viewport
+viewport.addEventListener('scroll', () => {
+  gutter.scrollTop = viewport.scrollTop;
+}, { passive: true });
 
-  textarea.addEventListener('scroll', () => {
-    if (textarea.scrollTop !== 0 || textarea.scrollLeft !== 0) {
-      viewport.scrollTop += textarea.scrollTop;
-      viewport.scrollLeft += textarea.scrollLeft;
-      textarea.scrollTop = 0;
-      textarea.scrollLeft = 0;
-      gutter.scrollTop = viewport.scrollTop;
-    }
-  });
+// Prevent textarea from buffering its own scroll offset out of sync
+textarea.addEventListener('scroll', () => {
+  if (textarea.scrollTop !== 0 || textarea.scrollLeft !== 0) {
+    viewport.scrollTop += textarea.scrollTop;
+    viewport.scrollLeft += textarea.scrollLeft;
+    textarea.scrollTop = 0;
+    textarea.scrollLeft = 0;
+  }
+  gutter.scrollTop = viewport.scrollTop;
+});
 
-  gutter.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    let deltaY = e.deltaY;
-    let deltaX = e.deltaX;
+// Direct wheel events anywhere over the editor area directly into viewport
+textarea.addEventListener('wheel', (e) => {
+  viewport.scrollTop += e.deltaY;
+  viewport.scrollLeft += e.deltaX;
+  gutter.scrollTop = viewport.scrollTop;
+  e.preventDefault();
+}, { passive: false });
 
-    if (e.deltaMode === 1) {
-      deltaY *= 22;
-      deltaX *= 22;
-    } else if (e.deltaMode === 2) {
-      deltaY *= viewport.clientHeight;
-      deltaX *= viewport.clientWidth;
-    }
-
-    viewport.scrollTop += deltaY;
-    viewport.scrollLeft += deltaX;
-    gutter.scrollTop = viewport.scrollTop;
-  }, { passive: false });
+gutter.addEventListener('wheel', (e) => {
+  viewport.scrollTop += e.deltaY;
+  viewport.scrollLeft += e.deltaX;
+  gutter.scrollTop = viewport.scrollTop;
+  e.preventDefault();
+}, { passive: false });
 
   function toggleDiagnosticsDrawer() {
     if (!currentDiagnostic || currentDiagnostic.success) return;
@@ -1219,26 +1218,26 @@ function formatMalformedJson(raw) {
   const tab = '  ';
   let formatted = '';
   let inString = false;
-  let isEscaped = false;
 
   for (let i = 0; i < raw.length; i++) {
     const char = raw[i];
 
-    if (inString) {
-      formatted += char;
-      if (char === '\\' && !isEscaped) {
-        isEscaped = true;
-      } else {
-        if (char === '"' && !isEscaped) inString = false;
-        isEscaped = false;
+    if (char === '"') {
+      let slashes = 0;
+      for (let b = i - 1; b >= 0 && raw[b] === '\\'; b--) slashes++;
+      if (slashes % 2 === 0) {
+        inString = !inString;
       }
+      formatted += char;
       continue;
     }
 
-    if (char === '"') {
-      inString = true;
+    if (inString) {
       formatted += char;
-    } else if (char === '{' || char === '[') {
+      continue;
+    }
+
+    if (char === '{' || char === '[') {
       indentLevel++;
       formatted += char + '\n' + tab.repeat(indentLevel);
     } else if (char === '}' || char === ']') {
@@ -1249,7 +1248,6 @@ function formatMalformedJson(raw) {
     } else if (char === ':') {
       formatted += ': ';
     } else if (char === '\n' || char === '\r') {
-      // Collapse excessive blank lines
       if (!formatted.endsWith('\n' + tab.repeat(indentLevel))) {
         formatted += '\n' + tab.repeat(indentLevel);
       }
@@ -1262,7 +1260,6 @@ function formatMalformedJson(raw) {
     }
   }
 
-  // Clean trailing spaces and normalize lines
   return formatted
     .split('\n')
     .map(line => line.trimEnd())
@@ -1597,6 +1594,16 @@ document.getElementById('btn-format').addEventListener('click', () => {
 
   // 11. Smart Typing Assist & Indentation Engine
   textarea.addEventListener('input', () => {
+    const cursorPos = textarea.selectionStart;
+    const linesBefore = textarea.value.slice(0, cursorPos).split('\n');
+    const curLineIdx = linesBefore.length - 1;
+
+    for (const [start, end] of foldedBlocks.entries()) {
+      if (curLineIdx >= start && curLineIdx <= end) {
+        foldedBlocks.delete(start);
+      }
+    }
+
     validate();
     render();
   });
@@ -1640,19 +1647,27 @@ document.getElementById('btn-format').addEventListener('click', () => {
         textarea.selectionEnd = end + 1;
         textarea.dispatchEvent(new Event('input', { bubbles: true }));
         return;
-      } else if (e.key === '"' && val[start] === '"') {
+      } 
+      
+      // Step over closing quote if already at closing quote
+      if (e.key === '"' && val[start] === '"') {
         e.preventDefault();
         textarea.selectionStart = textarea.selectionEnd = start + 1;
         render();
         return;
-      } else {
-        e.preventDefault();
-        const pair = e.key + openPairs[e.key];
-        textarea.setRangeText(pair, start, end, 'end');
-        textarea.selectionStart = textarea.selectionEnd = start + 1;
-        textarea.dispatchEvent(new Event('input', { bubbles: true }));
-        return;
       }
+
+      // Do NOT auto-insert pair for '"' if preceding character is alphanumeric or an open quote
+      if (e.key === '"' && start > 0 && /[a-zA-Z0-9\\"]/.test(val[start - 1])) {
+        return; // Allow standard native character input without generating extra quote
+      }
+
+      e.preventDefault();
+      const pair = e.key + openPairs[e.key];
+      textarea.setRangeText(pair, start, end, 'end');
+      textarea.selectionStart = textarea.selectionEnd = start + 1;
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
     }
 
     if ((e.key === '}' || e.key === ']') && start === end && val[start] === e.key) {
