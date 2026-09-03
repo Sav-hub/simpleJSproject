@@ -569,10 +569,13 @@
 
   // 3. String-Aware Active Bracket Finder
   function findActiveBracketPair(text, cursorPos) {
-    if (cursorPos < 0 || cursorPos > text.length) return null;
-    const brackets = ['{', '}', '[', ']'];
+    // Only evaluate bracket matching when the textarea is actively focused
+    if (document.activeElement !== textarea) return null;
+    if (cursorPos < 0 || cursorPos > text.length || text.length === 0) return null;
 
+    const brackets = ['{', '}', '[', ']'];
     let targetPos = -1;
+
     if (cursorPos > 0 && brackets.includes(text[cursorPos - 1])) {
       targetPos = cursorPos - 1;
     } else if (cursorPos < text.length && brackets.includes(text[cursorPos])) {
@@ -700,31 +703,36 @@
     const diag = analyzeJSONDiagnostics(textarea.value);
     currentDiagnostic = diag;
 
-    if (!diag) {
+    if (!diag || diag.success) {
       errorLine = null;
       diagnosticBadge.className = 'diagnostic-badge valid';
-      diagnosticText.textContent = 'Empty Document';
-      telKeys.innerHTML = '<span>0</span> keys';
+      diagnosticText.textContent = !diag ? 'Empty Document' : 'Valid JSON';
+      
+      // Explicitly reset, wipe, and hide diagnostics drawer
       diagnosticsDrawer.classList.remove('show');
-    } else if (diag.success) {
-      errorLine = null;
-      diagnosticBadge.className = 'diagnostic-badge valid';
-      diagnosticText.textContent = 'Valid JSON';
-      diagnosticsDrawer.classList.remove('show');
+      diagTypeText.textContent = '';
+      diagExplanation.textContent = '';
+      diagSnippet.textContent = '';
+      diagSuggestion.innerHTML = '';
+      btnDiagAutoFix.style.display = 'none';
 
-      let keyCount = 0;
-      function countKeys(obj, depth = 0) {
-        if (!obj || typeof obj !== 'object' || depth > 20) return;
-        if (Array.isArray(obj)) {
-          for (let i = 0; i < obj.length; i++) countKeys(obj[i], depth + 1);
-        } else {
-          const keys = Object.keys(obj);
-          keyCount += keys.length;
-          for (let i = 0; i < keys.length; i++) countKeys(obj[keys[i]], depth + 1);
+      if (!diag) {
+        telKeys.innerHTML = '<span>0</span> keys';
+      } else {
+        let keyCount = 0;
+        function countKeys(obj, depth = 0) {
+          if (!obj || typeof obj !== 'object' || depth > 20) return;
+          if (Array.isArray(obj)) {
+            for (let i = 0; i < obj.length; i++) countKeys(obj[i], depth + 1);
+          } else {
+            const keys = Object.keys(obj);
+            keyCount += keys.length;
+            for (let i = 0; i < keys.length; i++) countKeys(obj[keys[i]], depth + 1);
+          }
         }
+        countKeys(diag.data);
+        telKeys.innerHTML = `<span>${keyCount}</span> keys`;
       }
-      countKeys(diag.data);
-      telKeys.innerHTML = `<span>${keyCount}</span> keys`;
     } else {
       errorLine = diag.line;
       diagnosticBadge.className = 'diagnostic-badge error';
@@ -738,12 +746,10 @@
       
       btnDiagAutoFix.style.display = diag.autoFixable ? 'inline-block' : 'none';
 
-      if (errorLine !== null) {
-        const zeroBasedErr = errorLine - 1;
-        for (const [start, end] of foldedBlocks.entries()) {
-          if (zeroBasedErr >= start && zeroBasedErr <= end) {
-            foldedBlocks.delete(start);
-          }
+      const zeroBasedErr = errorLine - 1;
+      for (const [start, end] of foldedBlocks.entries()) {
+        if (zeroBasedErr >= start && zeroBasedErr <= end) {
+          foldedBlocks.delete(start);
         }
       }
     }
@@ -767,7 +773,8 @@
       telSelection.style.display = 'none';
     }
 
-    const totalLines = val.split('\n').length;
+    // Count exactly what is parsed in lineStructures, avoiding ghost trailing lines
+    const totalLines = val.length === 0 ? 0 : val.split('\n').length;
     telLines.innerHTML = `<span>${totalLines}</span> lines`;
 
     const bytes = new Blob([val]).size;
@@ -813,14 +820,14 @@
         gutterHtml += `
           <div class="gutter-row ${isErr ? 'error-line' : ''}" data-line="${idx + 1}">
             <span class="line-num">${idx + 1}</span>
-            ${foldInfo ? `<span class="fold-btn ${isFolded ? 'folded' : ''}" onclick="toggleFold(${idx}, ${foldInfo.end})">▼</span>` : '<span style="width:14px"></span>'}
+            ${foldInfo ? `<span class="fold-btn ${isFolded ? 'folded' : ''}" data-start="${idx}" data-end="${foldInfo.end}">▼</span>` : '<span style="width:14px"></span>'}
           </div>
         `;
 
         let foldBadge = '';
         if (isFolded && foldInfo) {
           const count = foldInfo.end - foldInfo.start;
-          foldBadge = `<span class="fold-badge" onclick="toggleFold(${idx}, ${foldInfo.end})">... ${count} lines hidden ${foldInfo.type === 'Object' ? '}' : ']'}</span>`;
+          foldBadge = `<span class="fold-badge" data-start="${idx}" data-end="${foldInfo.end}">... ${count} lines hidden ${foldInfo.type === 'Object' ? '}' : ']'}</span>`;
         }
 
         editorHtml += `<div class="code-line" id="code-line-${idx}">${l.html}${foldBadge}</div>`;
@@ -864,14 +871,28 @@
   const resizeObserver = new ResizeObserver(() => render());
   resizeObserver.observe(viewport);
 
-  window.toggleFold = function(start, end) {
+  function toggleFold(start, end) {
     if (foldedBlocks.has(start)) {
       foldedBlocks.delete(start);
     } else {
       foldedBlocks.set(start, end);
     }
     render();
-  };
+  }
+
+  gutter.addEventListener('click', (e) => {
+    const foldBtn = e.target.closest('.fold-btn');
+    if (foldBtn && foldBtn.dataset.start !== undefined) {
+      toggleFold(parseInt(foldBtn.dataset.start, 10), parseInt(foldBtn.dataset.end, 10));
+    }
+  });
+
+  editorLayer.addEventListener('click', (e) => {
+    const badge = e.target.closest('.fold-badge');
+    if (badge && badge.dataset.start !== undefined) {
+      toggleFold(parseInt(badge.dataset.start, 10), parseInt(badge.dataset.end, 10));
+    }
+  });
 
   viewport.addEventListener('scroll', () => {
     gutter.scrollTop = viewport.scrollTop;
@@ -1718,6 +1739,8 @@ document.getElementById('btn-format').addEventListener('click', () => {
       return;
     }
   });
+
+  textarea.addEventListener('blur', () => render());
 
   // Only execute editor initialization if json-textarea exists on the current page
   if (document.getElementById('json-textarea')) {

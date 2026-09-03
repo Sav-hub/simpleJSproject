@@ -48,9 +48,9 @@
         </div>
 
         <div class="actions">
-          <input type="file" id="file-input" accept=".json,application/json,text/plain" style="display: none;" />
+          <input type="file" id="file-input"  accept=".json,application/json,text/plain" aria-label="Upload JSON file" style="display: none;" />
           
-          <button class="icon-btn" id="btn-open" title="Open File">
+          <button class="icon-btn" id="btn-open" title="Open File" aria-label="Open JSON File">
             <svg viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/><path d="M2 10h20"/></svg>
           </button>
           <button class="icon-btn" id="btn-save" title="Save File (Ctrl+S)">
@@ -171,7 +171,7 @@
         </div>
         <div class="diag-body">
           <div id="diag-explanation" style="font-size: 12px; line-height: 16px;"></div>
-          <div class="diag-snippet" id="diag-snippet"></div>
+          <pre class="diag-snippet" id="diag-snippet" tabindex="0"></pre>
           <div class="diag-suggestion" id="diag-suggestion"></div>
         </div>
       </div>
