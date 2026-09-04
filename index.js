@@ -1593,16 +1593,33 @@ document.getElementById('btn-format').addEventListener('click', () => {
   });
 
   // 11. Smart Typing Assist & Indentation Engine
+  function expandFoldsAtLine(lineIdx) {
+    let needsRender = false;
+    for (const [start, end] of foldedBlocks.entries()) {
+      if (lineIdx >= start && lineIdx <= end + 1) {
+        foldedBlocks.delete(start);
+        needsRender = true;
+      }
+    }
+    if (needsRender) {
+      render();
+    }
+  }
+
+  // Unfold when user clicks into a collapsed block to position the caret accurately
+  textarea.addEventListener('pointerdown', () => {
+    if (foldedBlocks.size === 0) return;
+    setTimeout(() => {
+      const start = textarea.selectionStart;
+      const linesBefore = textarea.value.slice(0, start).split('\n');
+      expandFoldsAtLine(linesBefore.length - 1);
+    }, 0);
+  });
+
   textarea.addEventListener('input', () => {
     const cursorPos = textarea.selectionStart;
     const linesBefore = textarea.value.slice(0, cursorPos).split('\n');
-    const curLineIdx = linesBefore.length - 1;
-
-    for (const [start, end] of foldedBlocks.entries()) {
-      if (curLineIdx >= start && curLineIdx <= end) {
-        foldedBlocks.delete(start);
-      }
-    }
+    expandFoldsAtLine(linesBefore.length - 1);
 
     validate();
     render();
@@ -1619,6 +1636,12 @@ document.getElementById('btn-format').addEventListener('click', () => {
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const val = textarea.value;
+
+    // Clear folds at cursor line BEFORE typing mutates the buffer
+    if (foldedBlocks.size > 0) {
+      const linesBefore = val.slice(0, start).split('\n');
+      expandFoldsAtLine(linesBefore.length - 1);
+    }
 
     if (e.key === 'Escape') {
       if (diagnosticsDrawer.classList.contains('show')) {
