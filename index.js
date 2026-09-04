@@ -883,17 +883,39 @@
     render();
   }
 
+  // Prevent mousedown from stealing focus or triggering blur destruction
+  gutter.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.fold-btn') || e.target.closest('.gutter-row')) {
+      e.preventDefault();
+    }
+  });
+
   gutter.addEventListener('click', (e) => {
-    const foldBtn = e.target.closest('.fold-btn');
+    const row = e.target.closest('.gutter-row');
+    const foldBtn = e.target.closest('.fold-btn') || (row ? row.querySelector('.fold-btn') : null);
     if (foldBtn && foldBtn.dataset.start !== undefined) {
-      toggleFold(parseInt(foldBtn.dataset.start, 10), parseInt(foldBtn.dataset.end, 10));
+      e.preventDefault();
+      e.stopPropagation();
+      const start = parseInt(foldBtn.dataset.start, 10);
+      const end = parseInt(foldBtn.dataset.end, 10);
+      toggleFold(start, end);
+    }
+  });
+
+  editorLayer.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.fold-badge')) {
+      e.preventDefault();
     }
   });
 
   editorLayer.addEventListener('click', (e) => {
     const badge = e.target.closest('.fold-badge');
     if (badge && badge.dataset.start !== undefined) {
-      toggleFold(parseInt(badge.dataset.start, 10), parseInt(badge.dataset.end, 10));
+      e.preventDefault();
+      e.stopPropagation();
+      const start = parseInt(badge.dataset.start, 10);
+      const end = parseInt(badge.dataset.end, 10);
+      toggleFold(start, end);
     }
   });
 
@@ -1370,6 +1392,12 @@ document.getElementById('btn-format').addEventListener('click', () => {
   }
 
   function applySearch() {
+    if (!inlineSearchCapsule.classList.contains('active') || !searchInput.value.trim()) {
+      searchMatches = [];
+      rawSearchMatches = [];
+      if (searchCount) searchCount.textContent = '0/0';
+      return;
+    }
     const regexGlobal = getSearchRegExp(true);
     const regexTest = getSearchRegExp(false);
 
@@ -1599,7 +1627,7 @@ document.getElementById('btn-format').addEventListener('click', () => {
   function expandFoldsAtLine(lineIdx) {
     let needsRender = false;
     for (const [start, end] of foldedBlocks.entries()) {
-      if (lineIdx >= start && lineIdx <= end + 1) {
+      if (lineIdx > start && lineIdx <= end) {
         foldedBlocks.delete(start);
         needsRender = true;
       }
@@ -1631,7 +1659,6 @@ document.getElementById('btn-format').addEventListener('click', () => {
   ['click', 'keyup', 'focus', 'select'].forEach(evt => {
     textarea.addEventListener(evt, () => {
       updateTelemetry();
-      render();
     });
   });
 
@@ -1780,8 +1807,6 @@ document.getElementById('btn-format').addEventListener('click', () => {
       return;
     }
   });
-
-  textarea.addEventListener('blur', () => render());
 
   // Only execute editor initialization if json-textarea exists on the current page
   if (document.getElementById('json-textarea')) {
