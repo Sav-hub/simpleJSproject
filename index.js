@@ -841,26 +841,29 @@
     gutterContent.innerHTML = gutterHtml;
     editorLayer.innerHTML = editorHtml;
 
+    // 1. Lock widths hard to 100% (do NOT use scrollWidth)
     textarea.style.width = '100%';
-    textarea.style.height = '100%';
+    textarea.style.maxWidth = '100%';
     editorLayer.style.width = '100%';
-    editorLayer.style.height = '100%';
+    editorLayer.style.maxWidth = '100%';
 
-    const totalLines = foldedBlocks.size > 0 ? visibleLineCount : lineStructures.length;
-    const exactContentHeight = totalLines * 22 + 24;
-    const isOverflowY = exactContentHeight > viewport.clientHeight;
-    const targetHeight = isOverflowY ? exactContentHeight : viewport.clientHeight;
+    // 2. Measure actual wrapped height from DOM
+    const actualHeight = Math.max(editorLayer.scrollHeight, viewport.clientHeight);
+    textarea.style.height = `${actualHeight}px`;
+    gutterContent.style.height = `${actualHeight}px`;
 
-    const isOverflowX = editorLayer.scrollWidth > viewport.clientWidth;
-    const targetWidth = isOverflowX ? editorLayer.scrollWidth : viewport.clientWidth;
+    gutter.style.paddingBottom = '0px';
+    viewport.scrollLeft = 0;
+    textarea.scrollLeft = 0;
 
-    textarea.style.height = `${targetHeight}px`;
-    textarea.style.width = `${targetWidth}px`;
-    editorLayer.style.width = `${targetWidth}px`;
-    gutterContent.style.height = `${targetHeight}px`;
-
-    const hScrollHeight = viewport.offsetHeight - viewport.clientHeight;
-    gutter.style.paddingBottom = isOverflowX ? `${hScrollHeight}px` : '0px';
+    // 3. Match gutter row heights to wrapped code lines
+    const codeLines = editorLayer.querySelectorAll('.code-line');
+    const gutterRows = gutterContent.querySelectorAll('.gutter-row');
+    codeLines.forEach((lineEl, idx) => {
+      if (gutterRows[idx]) {
+        gutterRows[idx].style.height = `${lineEl.offsetHeight}px`;
+      }
+    });
 
     gutter.scrollTop = viewport.scrollTop;
 

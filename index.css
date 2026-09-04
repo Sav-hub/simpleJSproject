@@ -329,20 +329,26 @@
     .viewport {
       flex: 1;
       position: relative;
-      overflow: auto;
+      overflow-y: auto;
+      overflow-x: hidden !important; /* Disallow any viewport horizontal scroll */
       min-height: 0;
       min-width: 0;
+      width: 100%;
     }
 
     .editor-layer, #json-textarea {
       position: absolute;
       top: 0;
       left: 0;
-      min-width: 100%;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 100% !important;
       min-height: 100%;
       padding: 12px;
       margin: 0;
-      white-space: pre;
+      white-space: pre-wrap !important;
+      word-break: break-all !important; /* Guarantees long URLs/strings break across lines */
+      overflow-wrap: break-word !important;
       tab-size: 2;
       font-family: var(--font-family);
       font-size: var(--font-size);
@@ -361,21 +367,19 @@
       outline: none;
       resize: none;
       z-index: 2;
-      overflow: hidden;
-      word-wrap: normal;
-    }
-
-    .editor-layer {
-      z-index: 1;
-      pointer-events: none;
-      color: var(--text);
+      overflow-x: hidden !important; /* Kills textarea horizontal scroll completely */
+      overflow-y: hidden !important;
+      word-wrap: break-word;
     }
 
     .code-line {
-      height: var(--line-height);
+      min-height: var(--line-height); /* Expands vertically when long strings wrap */
+      height: auto !important;
       line-height: var(--line-height);
       display: block;
-      white-space: pre;
+      white-space: pre-wrap !important;
+      word-break: break-all !important;
+      overflow-wrap: break-word !important;
       box-sizing: border-box;
       border-radius: 2px;
       transition: background-color 0.2s ease;
