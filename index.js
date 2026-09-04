@@ -1627,6 +1627,7 @@ document.getElementById('btn-format').addEventListener('click', () => {
   function expandFoldsAtLine(lineIdx) {
     let needsRender = false;
     for (const [start, end] of foldedBlocks.entries()) {
+      // Only expand if the user is actively mutating content inside hidden lines
       if (lineIdx > start && lineIdx <= end) {
         foldedBlocks.delete(start);
         needsRender = true;
@@ -1637,13 +1638,44 @@ document.getElementById('btn-format').addEventListener('click', () => {
     }
   }
 
-  // Unfold when user clicks into a collapsed block to position the caret accurately
-  textarea.addEventListener('pointerdown', () => {
+  // Map visual click to correct raw line buffer without expanding folded blocks
+  textarea.addEventListener('pointerdown', (e) => {
     if (foldedBlocks.size === 0) return;
+
+    // Calculate clicked visual line from click Y coordinate
+    const rect = textarea.getBoundingClientRect();
+    const clickY = e.clientY - rect.top;
+    const lineHeight = 22; // matches var(--line-height)
+    const clickedVisualLine = Math.floor(clickY / lineHeight);
+
+    // Map visual line index to raw buffer line index
+    const { lineStructures } = parseEditorLines(textarea.value);
+    const hiddenLines = new Set();
+    foldedBlocks.forEach((end, start) => {
+      for (let i = start + 1; i <= end; i++) hiddenLines.add(i);
+    });
+
+    let currentVisual = 0;
+    let targetRawLine = 0;
+    for (let r = 0; r < lineStructures.length; r++) {
+      if (!hiddenLines.has(r)) {
+        if (currentVisual === clickedVisualLine) {
+          targetRawLine = r;
+          break;
+        }
+        currentVisual++;
+      }
+    }
+
+    // Set cursor to the beginning of the targeted raw line
     setTimeout(() => {
-      const start = textarea.selectionStart;
-      const linesBefore = textarea.value.slice(0, start).split('\n');
-      expandFoldsAtLine(linesBefore.length - 1);
+      const lines = textarea.value.split('\n');
+      let charPos = 0;
+      for (let i = 0; i < targetRawLine && i < lines.length; i++) {
+        charPos += lines[i].length + 1;
+      }
+      textarea.setSelectionRange(charPos, charPos);
+      updateTelemetry();
     }, 0);
   });
 
@@ -1667,8 +1699,9 @@ document.getElementById('btn-format').addEventListener('click', () => {
     const end = textarea.selectionEnd;
     const val = textarea.value;
 
-    // Clear folds at cursor line BEFORE typing mutates the buffer
-    if (foldedBlocks.size > 0) {
+    // Only expand if typing a non-navigation modifying character inside a folded region
+    const nonModifyingKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', 'Escape', 'Control', 'Shift', 'Alt', 'Meta'];
+    if (foldedBlocks.size > 0 && !nonModifyingKeys.includes(e.key) && !e.ctrlKey && !e.metaKey) {
       const linesBefore = val.slice(0, start).split('\n');
       expandFoldsAtLine(linesBefore.length - 1);
     }
