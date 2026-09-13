@@ -70,7 +70,13 @@ let isRendering = false;
 let isCaseSensitive = false;
 let isRegex = false;
 
-// Inject keyframe animation for custom visual caret
+// Debouncing and scheduling handles
+let validationDebounceTimer = null;
+let renderDebounceTimer = null;
+let renderFrame = null;
+let caretFrame = null;
+const textEncoder = new TextEncoder();
+
 if (!document.getElementById('caret-blink-style')) {
   const style = document.createElement('style');
   style.id = 'caret-blink-style';
@@ -711,6 +717,7 @@ function parseEditorLines(rawText) {
     const line = lines[i];
     let inStr = false;
 
+    // Scan for folding scopes
     for (let c = 0; c < line.length; c++) {
       const char = line[c];
       if (char === '\\' && inStr) {
@@ -735,6 +742,13 @@ function parseEditorLines(rawText) {
           }
         }
       }
+    }
+
+    // High-volume line guard: bypass regex tokenizer on enormous single lines
+    if (line.length > 4000) {
+      lineStructures.push({ raw: line, html: escapeHtml(line) || '&nbsp;' });
+      charAccumulator += line.length + 1;
+      continue;
     }
 
     const tokenRegex = /("(?:[^"\\]|\\.)*"(?:\s*:)?|"(?:[^"\\]|\\.)*$|'(?:[^'\\]|\\.)*'(?:\s*:)?|\b(?:true|false|null)\b|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?|[{}[\],:])/g;
@@ -780,6 +794,29 @@ function parseEditorLines(rawText) {
   return { lineStructures, foldRanges };
 }
 
+// Stack-safe, iterative key counter (no recursion limits)
+function countKeysIterative(root) {
+  if (!root || typeof root !== 'object') return 0;
+  let count = 0;
+  const stack = [root];
+  while (stack.length > 0) {
+    const curr = stack.pop();
+    if (Array.isArray(curr)) {
+      for (let i = 0; i < curr.length; i++) {
+        if (curr[i] && typeof curr[i] === 'object') stack.push(curr[i]);
+      }
+    } else {
+      const keys = Object.keys(curr);
+      count += keys.length;
+      for (let i = 0; i < keys.length; i++) {
+        const val = curr[keys[i]];
+        if (val && typeof val === 'object') stack.push(val);
+      }
+    }
+  }
+  return count;
+}
+
 function validate() {
   const diag = analyzeJSONDiagnostics(textarea.value);
   currentDiagnostic = diag;
@@ -799,19 +836,8 @@ function validate() {
     if (!diag) {
       telKeys.innerHTML = '<span>0</span> keys';
     } else {
-      let keyCount = 0;
-      function countKeys(obj, depth = 0) {
-        if (!obj || typeof obj !== 'object' || depth > 20) return;
-        if (Array.isArray(obj)) {
-          for (let i = 0; i < obj.length; i++) countKeys(obj[i], depth + 1);
-        } else {
-          const keys = Object.keys(obj);
-          keyCount += keys.length;
-          for (let i = 0; i < keys.length; i++) countKeys(obj[keys[i]], depth + 1);
-        }
-      }
-      countKeys(diag.data);
-      telKeys.innerHTML = `<span>${keyCount}</span> keys`;
+      const totalKeys = countKeysIterative(diag.data);
+      telKeys.innerHTML = `<span>${totalKeys}</span> keys`;
     }
   } else {
     errorLine = diag.line;
@@ -835,6 +861,13 @@ function validate() {
   }
 }
 
+function scheduleValidation() {
+  clearTimeout(validationDebounceTimer);
+  validationDebounceTimer = setTimeout(() => {
+    validate();
+  }, 220);
+}
+
 function updateTelemetry() {
   const val = textarea.value;
   const start = textarea.selectionStart;
@@ -855,7 +888,7 @@ function updateTelemetry() {
   const totalLines = val.length === 0 ? 0 : val.split('\n').length;
   telLines.innerHTML = `<span>${totalLines}</span> lines`;
 
-  const bytes = new Blob([val]).size;
+  const bytes = textEncoder.encode(val).length;
   let formattedSize = bytes + ' B';
   if (bytes >= 1024 * 1024) {
     formattedSize = (bytes / (1024 * 1024)).toFixed(2) + ' MB';
@@ -864,7 +897,7 @@ function updateTelemetry() {
   }
   telSize.innerHTML = `<span>${formattedSize}</span>`;
 
-  updateCustomCaret();
+  scheduleCustomCaret();
 }
 
 function computeHiddenLines() {
@@ -879,7 +912,11 @@ function computeHiddenLines() {
   return hidden;
 }
 
-// 1:1 Synchronized Visual Caret for Folded State
+function scheduleCustomCaret() {
+  cancelAnimationFrame(caretFrame);
+  caretFrame = requestAnimationFrame(updateCustomCaret);
+}
+
 function updateCustomCaret() {
   let caretEl = document.getElementById('custom-caret');
   if (!caretEl) {
@@ -889,17 +926,14 @@ function updateCustomCaret() {
     editorLayer.appendChild(caretEl);
   }
 
-  // If no folds are active, rely strictly on native browser caret
   if (foldedBlocks.size === 0) {
     textarea.style.caretColor = 'var(--text)';
     caretEl.style.display = 'none';
     return;
   }
 
-  // If folds are active, hide the displaced native caret
   textarea.style.caretColor = 'transparent';
 
-  // Do not render custom caret if blurred or selection range is active
   if (document.activeElement !== textarea || textarea.selectionStart !== textarea.selectionEnd) {
     caretEl.style.display = 'none';
     return;
@@ -980,11 +1014,30 @@ function updateCustomCaret() {
   caretEl.style.top = `${caretY}px`;
   caretEl.style.height = `${caretHeight}px`;
   caretEl.style.display = 'block';
+}
 
-  // Reset blink animation so caret is instantly visible on move
-  caretEl.style.animation = 'none';
-  void caretEl.offsetWidth;
-  caretEl.style.animation = 'editorCaretBlink 1.05s infinite';
+// Synchronize gutter row heights with code-line heights for accurate visual alignment[cite: 1]
+function syncGutterHeights() {
+  const codeLines = editorLayer.querySelectorAll('.code-line');
+  const gutterRows = gutterContent.querySelectorAll('.gutter-row');
+  const actualHeight = Math.max(editorLayer.scrollHeight, viewport.clientHeight);
+
+  // Exact 1:1 match to guarantee gutter row height matches wrapped code lines[cite: 1]
+  const len = Math.min(codeLines.length, gutterRows.length);
+  const heights = new Float32Array(len);
+  for (let i = 0; i < len; i++) {
+    heights[i] = codeLines[i].getBoundingClientRect().height;
+  }
+  for (let i = 0; i < len; i++) {
+    // Only mutate if different to prevent unnecessary layout invalidation
+    const h = `${heights[i]}px`;
+    if (gutterRows[i].style.height !== h) {
+      gutterRows[i].style.height = h;
+    }
+  }
+
+  textarea.style.height = `${actualHeight}px`;
+  gutterContent.style.height = `${actualHeight}px`;
 }
 
 function render() {
@@ -1045,17 +1098,9 @@ function render() {
   editorLayer.style.width = '100%';
   editorLayer.style.maxWidth = '100%';
 
-  const codeLines = editorLayer.querySelectorAll('.code-line');
-  const gutterRows = gutterContent.querySelectorAll('.gutter-row');
-  codeLines.forEach((lineEl, idx) => {
-    if (gutterRows[idx]) {
-      gutterRows[idx].style.height = `${lineEl.getBoundingClientRect().height}px`;
-    }
-  });
-
-  const actualHeight = Math.max(editorLayer.scrollHeight, viewport.clientHeight);
-  textarea.style.height = `${actualHeight}px`;
-  gutterContent.style.height = `${actualHeight}px`;
+  // Sync row heights on next paint without blocking typing
+  cancelAnimationFrame(renderFrame);
+  renderFrame = requestAnimationFrame(syncGutterHeights);
 
   gutter.style.paddingBottom = '0px';
   viewport.scrollLeft = 0;
@@ -1064,13 +1109,17 @@ function render() {
   gutter.scrollTop = viewport.scrollTop;
 
   updateTelemetry();
-  applySearch();
-  updateCustomCaret();
+  if (inlineSearchCapsule.classList.contains('active')) {
+    applySearch();
+  }
   isRendering = false;
 }
 
 const resizeObserver = new ResizeObserver(() => {
-  if (!isRendering) render();
+  if (!isRendering) {
+    // When window resizes, line wrap points change; immediately resync heights[cite: 1]
+    syncGutterHeights();
+  }
 });
 resizeObserver.observe(viewport);
 
@@ -1105,7 +1154,7 @@ gutter.addEventListener('click', (e) => {
 
 viewport.addEventListener('scroll', () => {
   gutter.scrollTop = viewport.scrollTop;
-  updateCustomCaret();
+  scheduleCustomCaret();
 }, { passive: true });
 
 textarea.addEventListener('scroll', () => {
@@ -1116,14 +1165,14 @@ textarea.addEventListener('scroll', () => {
     textarea.scrollLeft = 0;
   }
   gutter.scrollTop = viewport.scrollTop;
-  updateCustomCaret();
+  scheduleCustomCaret();
 });
 
 textarea.addEventListener('wheel', (e) => {
   viewport.scrollTop += e.deltaY;
   viewport.scrollLeft += e.deltaX;
   gutter.scrollTop = viewport.scrollTop;
-  updateCustomCaret();
+  scheduleCustomCaret();
   e.preventDefault();
 }, { passive: false });
 
@@ -1131,7 +1180,7 @@ gutter.addEventListener('wheel', (e) => {
   viewport.scrollTop += e.deltaY;
   viewport.scrollLeft += e.deltaX;
   gutter.scrollTop = viewport.scrollTop;
-  updateCustomCaret();
+  scheduleCustomCaret();
   e.preventDefault();
 }, { passive: false });
 
@@ -1350,21 +1399,48 @@ function handleSmartCaretNavigation(key) {
   }
 }
 
-function sortKeysRecursive(data, direction = 'asc') {
+// Stack-safe, iterative key sorting (zero call stack recursion)
+function sortKeysIterative(data, direction = 'asc') {
   if (data === null || typeof data !== 'object') return data;
-  if (Array.isArray(data)) {
-    return data.map(item => sortKeysRecursive(item, direction));
+  const isArr = Array.isArray(data);
+  const rootResult = isArr ? [] : {};
+  const stack = [{ src: data, dest: rootResult, isArray: isArr }];
+
+  while (stack.length > 0) {
+    const { src, dest, isArray } = stack.pop();
+
+    if (isArray) {
+      for (let i = 0; i < src.length; i++) {
+        const item = src[i];
+        if (item !== null && typeof item === 'object') {
+          const subDest = Array.isArray(item) ? [] : {};
+          dest[i] = subDest;
+          stack.push({ src: item, dest: subDest, isArray: Array.isArray(item) });
+        } else {
+          dest[i] = item;
+        }
+      }
+    } else {
+      const sortedKeys = Object.keys(src).sort((a, b) => {
+        return direction === 'asc'
+          ? a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+          : b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' });
+      });
+
+      for (const k of sortedKeys) {
+        const item = src[k];
+        if (item !== null && typeof item === 'object') {
+          const subDest = Array.isArray(item) ? [] : {};
+          dest[k] = subDest;
+          stack.push({ src: item, dest: subDest, isArray: Array.isArray(item) });
+        } else {
+          dest[k] = item;
+        }
+      }
+    }
   }
-  const sortedKeys = Object.keys(data).sort((a, b) => {
-    return direction === 'asc'
-      ? a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
-      : b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' });
-  });
-  const result = {};
-  for (const k of sortedKeys) {
-    result[k] = sortKeysRecursive(data[k], direction);
-  }
-  return result;
+
+  return rootResult;
 }
 
 function toCamelCaseKey(str) {
@@ -1389,16 +1465,43 @@ function toSnakeCaseKey(str) {
   return prefix + snake;
 }
 
-function transformKeysRecursive(data, transformFn) {
+// Stack-safe, iterative key case transforming (zero call stack recursion)
+function transformKeysIterative(data, transformFn) {
   if (data === null || typeof data !== 'object') return data;
-  if (Array.isArray(data)) {
-    return data.map(item => transformKeysRecursive(item, transformFn));
+  const isArr = Array.isArray(data);
+  const rootResult = isArr ? [] : {};
+  const stack = [{ src: data, dest: rootResult, isArray: isArr }];
+
+  while (stack.length > 0) {
+    const { src, dest, isArray } = stack.pop();
+
+    if (isArray) {
+      for (let i = 0; i < src.length; i++) {
+        const item = src[i];
+        if (item !== null && typeof item === 'object') {
+          const subDest = Array.isArray(item) ? [] : {};
+          dest[i] = subDest;
+          stack.push({ src: item, dest: subDest, isArray: Array.isArray(item) });
+        } else {
+          dest[i] = item;
+        }
+      }
+    } else {
+      for (const k of Object.keys(src)) {
+        const newKey = transformFn(k);
+        const item = src[k];
+        if (item !== null && typeof item === 'object') {
+          const subDest = Array.isArray(item) ? [] : {};
+          dest[newKey] = subDest;
+          stack.push({ src: item, dest: subDest, isArray: Array.isArray(item) });
+        } else {
+          dest[newKey] = item;
+        }
+      }
+    }
   }
-  const result = {};
-  for (const key of Object.keys(data)) {
-    result[transformFn(key)] = transformKeysRecursive(data[key], transformFn);
-  }
-  return result;
+
+  return rootResult;
 }
 
 function executeTransformation(transformFn) {
@@ -1449,19 +1552,19 @@ document.querySelectorAll('#tests-menu .dropdown-item').forEach(btn => {
 });
 
 document.getElementById('tool-sort-asc').addEventListener('click', () => {
-  executeTransformation(data => sortKeysRecursive(data, 'asc'));
+  executeTransformation(data => sortKeysIterative(data, 'asc'));
 });
 
 document.getElementById('tool-sort-desc').addEventListener('click', () => {
-  executeTransformation(data => sortKeysRecursive(data, 'desc'));
+  executeTransformation(data => sortKeysIterative(data, 'desc'));
 });
 
 document.getElementById('tool-to-camel').addEventListener('click', () => {
-  executeTransformation(data => transformKeysRecursive(data, toCamelCaseKey));
+  executeTransformation(data => transformKeysIterative(data, toCamelCaseKey));
 });
 
 document.getElementById('tool-to-snake').addEventListener('click', () => {
-  executeTransformation(data => transformKeysRecursive(data, toSnakeCaseKey));
+  executeTransformation(data => transformKeysIterative(data, toSnakeCaseKey));
 });
 
 function saveEditorContent() {
@@ -1928,7 +2031,6 @@ window.addEventListener('keydown', (e) => {
 function expandFoldsAtLine(lineIdx) {
   let needsRender = false;
   for (const [start, end] of foldedBlocks.entries()) {
-    // Only expand if typing STRICTLY inside hidden lines, not on the visible header line
     if (lineIdx > start && lineIdx <= end) {
       foldedBlocks.delete(start);
       needsRender = true;
@@ -2010,8 +2112,12 @@ textarea.addEventListener('input', () => {
   const linesBefore = textarea.value.slice(0, cursorPos).split('\n');
   expandFoldsAtLine(linesBefore.length - 1);
 
-  validate();
-  render();
+  scheduleValidation();
+
+  if (renderDebounceTimer) cancelAnimationFrame(renderDebounceTimer);
+  renderDebounceTimer = requestAnimationFrame(() => {
+    render();
+  });
 });
 
 ['click', 'keyup', 'focus'].forEach(evt => {
@@ -2073,7 +2179,7 @@ textarea.addEventListener('keydown', (e) => {
     if (e.key === '"' && val[start] === '"') {
       e.preventDefault();
       textarea.selectionStart = textarea.selectionEnd = start + 1;
-      render();
+      scheduleCustomCaret();
       return;
     }
 
@@ -2092,7 +2198,7 @@ textarea.addEventListener('keydown', (e) => {
   if ((e.key === '}' || e.key === ']') && start === end && val[start] === e.key) {
     e.preventDefault();
     textarea.selectionStart = textarea.selectionEnd = start + 1;
-    render();
+    scheduleCustomCaret();
     return;
   }
 
