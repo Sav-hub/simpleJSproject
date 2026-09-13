@@ -70,6 +70,30 @@ let isRendering = false;
 let isCaseSensitive = false;
 let isRegex = false;
 
+// Inject keyframe animation for custom visual caret
+if (!document.getElementById('caret-blink-style')) {
+  const style = document.createElement('style');
+  style.id = 'caret-blink-style';
+  style.textContent = `
+    @keyframes editorCaretBlink {
+      0%, 45% { opacity: 1; }
+      50%, 95% { opacity: 0; }
+      100% { opacity: 1; }
+    }
+    .custom-editor-caret {
+      position: absolute;
+      width: 2px;
+      background-color: var(--text);
+      pointer-events: none;
+      z-index: 5;
+      display: none;
+      border-radius: 1px;
+      animation: editorCaretBlink 1.05s infinite;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 function applyTheme(isDark) {
   document.body.classList.toggle('dark-theme', isDark);
   document.getElementById('theme-icon').textContent = isDark ? '☀️' : '🌙';
@@ -90,7 +114,7 @@ function normalizeNewlines(str) {
 }
 
 function setEditorValue(newVal, newFilename = null) {
-  const cleanVal = normalizeNewlines(newVal);
+  const cleanVal = normalizeNewlines(newVal).replace(/\u00A0/g, ' ');
   textarea.focus();
   textarea.setSelectionRange(0, textarea.value.length);
   textarea.setRangeText(cleanVal, 0, textarea.value.length, 'end');
@@ -839,6 +863,8 @@ function updateTelemetry() {
     formattedSize = (bytes / 1024).toFixed(1) + ' KB';
   }
   telSize.innerHTML = `<span>${formattedSize}</span>`;
+
+  updateCustomCaret();
 }
 
 function computeHiddenLines() {
@@ -851,6 +877,114 @@ function computeHiddenLines() {
     }
   }
   return hidden;
+}
+
+// 1:1 Synchronized Visual Caret for Folded State
+function updateCustomCaret() {
+  let caretEl = document.getElementById('custom-caret');
+  if (!caretEl) {
+    caretEl = document.createElement('div');
+    caretEl.id = 'custom-caret';
+    caretEl.className = 'custom-editor-caret';
+    editorLayer.appendChild(caretEl);
+  }
+
+  // If no folds are active, rely strictly on native browser caret
+  if (foldedBlocks.size === 0) {
+    textarea.style.caretColor = 'var(--text)';
+    caretEl.style.display = 'none';
+    return;
+  }
+
+  // If folds are active, hide the displaced native caret
+  textarea.style.caretColor = 'transparent';
+
+  // Do not render custom caret if blurred or selection range is active
+  if (document.activeElement !== textarea || textarea.selectionStart !== textarea.selectionEnd) {
+    caretEl.style.display = 'none';
+    return;
+  }
+
+  const cursorPos = textarea.selectionStart;
+  const val = textarea.value;
+  const linesBefore = val.slice(0, cursorPos).split('\n');
+  const curRawLine = linesBefore.length - 1;
+  const curCol = linesBefore[linesBefore.length - 1].length;
+
+  const hiddenLines = computeHiddenLines();
+  let targetDisplayLine = curRawLine;
+
+  if (hiddenLines.has(curRawLine)) {
+    for (const [start, end] of foldedBlocks.entries()) {
+      if (curRawLine >= start && curRawLine <= end) {
+        targetDisplayLine = start;
+        break;
+      }
+    }
+  }
+
+  const lineEl = document.getElementById(`code-line-${targetDisplayLine}`);
+  if (!lineEl) {
+    caretEl.style.display = 'none';
+    return;
+  }
+
+  const layerRect = editorLayer.getBoundingClientRect();
+  const lineRect = lineEl.getBoundingClientRect();
+
+  let targetNode = null;
+  let targetOffset = 0;
+  let accumulatedChars = 0;
+
+  const walker = document.createTreeWalker(lineEl, NodeFilter.SHOW_TEXT, null, false);
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (node.parentElement && node.parentElement.closest('.fold-badge')) continue;
+    const len = node.nodeValue.length;
+    if (accumulatedChars + len >= curCol) {
+      targetNode = node;
+      targetOffset = curCol - accumulatedChars;
+      break;
+    }
+    accumulatedChars += len;
+    targetNode = node;
+    targetOffset = len;
+  }
+
+  let caretX = 12;
+  let caretY = lineRect.top - layerRect.top;
+  let caretHeight = 22;
+
+  if (targetNode && targetNode.nodeValue.length > 0) {
+    const range = document.createRange();
+    const safeOffset = Math.min(targetOffset, targetNode.nodeValue.length);
+    range.setStart(targetNode, safeOffset);
+    range.setEnd(targetNode, safeOffset);
+    const rect = range.getBoundingClientRect();
+
+    if (rect.left > 0) {
+      caretX = rect.left - layerRect.left;
+    } else {
+      caretX = lineRect.left - layerRect.left + 12;
+    }
+
+    if (rect.top > 0) {
+      caretY = rect.top - layerRect.top;
+    }
+    if (rect.height > 0) {
+      caretHeight = rect.height;
+    }
+  }
+
+  caretEl.style.left = `${Math.max(12, caretX)}px`;
+  caretEl.style.top = `${caretY}px`;
+  caretEl.style.height = `${caretHeight}px`;
+  caretEl.style.display = 'block';
+
+  // Reset blink animation so caret is instantly visible on move
+  caretEl.style.animation = 'none';
+  void caretEl.offsetWidth;
+  caretEl.style.animation = 'editorCaretBlink 1.05s infinite';
 }
 
 function render() {
@@ -931,6 +1065,7 @@ function render() {
 
   updateTelemetry();
   applySearch();
+  updateCustomCaret();
   isRendering = false;
 }
 
@@ -970,6 +1105,7 @@ gutter.addEventListener('click', (e) => {
 
 viewport.addEventListener('scroll', () => {
   gutter.scrollTop = viewport.scrollTop;
+  updateCustomCaret();
 }, { passive: true });
 
 textarea.addEventListener('scroll', () => {
@@ -980,12 +1116,14 @@ textarea.addEventListener('scroll', () => {
     textarea.scrollLeft = 0;
   }
   gutter.scrollTop = viewport.scrollTop;
+  updateCustomCaret();
 });
 
 textarea.addEventListener('wheel', (e) => {
   viewport.scrollTop += e.deltaY;
   viewport.scrollLeft += e.deltaX;
   gutter.scrollTop = viewport.scrollTop;
+  updateCustomCaret();
   e.preventDefault();
 }, { passive: false });
 
@@ -993,6 +1131,7 @@ gutter.addEventListener('wheel', (e) => {
   viewport.scrollTop += e.deltaY;
   viewport.scrollLeft += e.deltaX;
   gutter.scrollTop = viewport.scrollTop;
+  updateCustomCaret();
   e.preventDefault();
 }, { passive: false });
 
@@ -1879,6 +2018,11 @@ textarea.addEventListener('input', () => {
   textarea.addEventListener(evt, () => {
     updateTelemetry();
   });
+});
+
+textarea.addEventListener('blur', () => {
+  const caretEl = document.getElementById('custom-caret');
+  if (caretEl) caretEl.style.display = 'none';
 });
 
 textarea.addEventListener('keydown', (e) => {
