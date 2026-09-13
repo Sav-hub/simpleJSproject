@@ -65,6 +65,7 @@ let currentSearchIdx = -1;
 let errorLine = null;
 let currentDiagnostic = null;
 let dragCounter = 0;
+let isRendering = false;
 
 let isCaseSensitive = false;
 let isRegex = false;
@@ -84,15 +85,28 @@ function escapeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function normalizeNewlines(str) {
+  return str.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
 function setEditorValue(newVal, newFilename = null) {
+  const cleanVal = normalizeNewlines(newVal);
   textarea.focus();
   textarea.setSelectionRange(0, textarea.value.length);
-  textarea.setRangeText(newVal, 0, textarea.value.length, 'end');
+  textarea.setRangeText(cleanVal, 0, textarea.value.length, 'end');
   if (newFilename) {
     activeFilename = newFilename;
     activeFilenameEl.textContent = `(${newFilename})`;
   }
   textarea.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function clearSelectionHighlight() {
+  if (textarea.selectionStart !== textarea.selectionEnd) {
+    const pos = textarea.selectionStart;
+    textarea.setSelectionRange(pos, pos);
+    updateTelemetry();
+  }
 }
 
 function getLineColAndSnippet(text, index) {
@@ -646,6 +660,20 @@ function findActiveBracketPair(text, cursorPos) {
   return null;
 }
 
+function isInsideString(text, pos) {
+  let inStr = false;
+  for (let i = 0; i < pos; i++) {
+    if (text[i] === '\\' && inStr) {
+      i++;
+      continue;
+    }
+    if (text[i] === '"') {
+      inStr = !inStr;
+    }
+  }
+  return inStr;
+}
+
 function parseEditorLines(rawText) {
   const lines = rawText.split('\n');
   const lineStructures = [];
@@ -813,26 +841,39 @@ function updateTelemetry() {
   telSize.innerHTML = `<span>${formattedSize}</span>`;
 }
 
+function computeHiddenLines() {
+  const hidden = new Set();
+  const sortedFolds = Array.from(foldedBlocks.entries()).sort((a, b) => a[0] - b[0]);
+  for (const [start, end] of sortedFolds) {
+    if (hidden.has(start)) continue;
+    for (let i = start + 1; i <= end; i++) {
+      hidden.add(i);
+    }
+  }
+  return hidden;
+}
+
 function render() {
+  if (isRendering) return;
+  isRendering = true;
+
   const raw = textarea.value;
   const { lineStructures, foldRanges } = parseEditorLines(raw);
 
-  const activeStartLines = new Set(foldRanges.map(f => f.start));
-  for (const key of foldedBlocks.keys()) {
-    if (!activeStartLines.has(key)) foldedBlocks.delete(key);
+  const activeStartLines = new Map(foldRanges.map(f => [f.start, f.end]));
+  for (const [start, end] of foldedBlocks.entries()) {
+    if (!activeStartLines.has(start) || activeStartLines.get(start) !== end) {
+      foldedBlocks.delete(start);
+    }
   }
 
   const foldMap = new Map();
   foldRanges.forEach(f => foldMap.set(f.start, f));
 
-  const hiddenLines = new Set();
-  foldedBlocks.forEach((end, start) => {
-    for (let i = start + 1; i <= end; i++) hiddenLines.add(i);
-  });
+  const hiddenLines = computeHiddenLines();
 
   let gutterHtml = '';
   let editorHtml = '';
-  let visibleLineCount = 0;
 
   lineStructures.forEach((l, idx) => {
     const isFolded = foldedBlocks.has(idx);
@@ -841,7 +882,6 @@ function render() {
     const isErr = errorLine === (idx + 1);
 
     if (!isHidden) {
-      visibleLineCount++;
       gutterHtml += `
         <div class="gutter-row ${isErr ? 'error-line' : ''}" data-line="${idx + 1}">
           <span class="line-num">${idx + 1}</span>
@@ -871,6 +911,14 @@ function render() {
   editorLayer.style.width = '100%';
   editorLayer.style.maxWidth = '100%';
 
+  const codeLines = editorLayer.querySelectorAll('.code-line');
+  const gutterRows = gutterContent.querySelectorAll('.gutter-row');
+  codeLines.forEach((lineEl, idx) => {
+    if (gutterRows[idx]) {
+      gutterRows[idx].style.height = `${lineEl.getBoundingClientRect().height}px`;
+    }
+  });
+
   const actualHeight = Math.max(editorLayer.scrollHeight, viewport.clientHeight);
   textarea.style.height = `${actualHeight}px`;
   gutterContent.style.height = `${actualHeight}px`;
@@ -879,24 +927,20 @@ function render() {
   viewport.scrollLeft = 0;
   textarea.scrollLeft = 0;
 
-  const codeLines = editorLayer.querySelectorAll('.code-line');
-  const gutterRows = gutterContent.querySelectorAll('.gutter-row');
-  codeLines.forEach((lineEl, idx) => {
-    if (gutterRows[idx]) {
-      gutterRows[idx].style.height = `${lineEl.offsetHeight}px`;
-    }
-  });
-
   gutter.scrollTop = viewport.scrollTop;
 
   updateTelemetry();
   applySearch();
+  isRendering = false;
 }
 
-const resizeObserver = new ResizeObserver(() => render());
+const resizeObserver = new ResizeObserver(() => {
+  if (!isRendering) render();
+});
 resizeObserver.observe(viewport);
 
 function toggleFold(start, end) {
+  clearSelectionHighlight();
   if (foldedBlocks.has(start)) {
     foldedBlocks.delete(start);
   } else {
@@ -906,6 +950,7 @@ function toggleFold(start, end) {
 }
 
 gutter.addEventListener('mousedown', (e) => {
+  clearSelectionHighlight();
   if (e.target.closest('.fold-btn') || e.target.closest('.gutter-row')) {
     e.preventDefault();
   }
@@ -919,23 +964,6 @@ gutter.addEventListener('click', (e) => {
     e.stopPropagation();
     const start = parseInt(foldBtn.dataset.start, 10);
     const end = parseInt(foldBtn.dataset.end, 10);
-    toggleFold(start, end);
-  }
-});
-
-editorLayer.addEventListener('mousedown', (e) => {
-  if (e.target.closest('.fold-badge')) {
-    e.preventDefault();
-  }
-});
-
-editorLayer.addEventListener('click', (e) => {
-  const badge = e.target.closest('.fold-badge');
-  if (badge && badge.dataset.start !== undefined) {
-    e.preventDefault();
-    e.stopPropagation();
-    const start = parseInt(badge.dataset.start, 10);
-    const end = parseInt(badge.dataset.end, 10);
     toggleFold(start, end);
   }
 });
@@ -1018,7 +1046,6 @@ btnCloseDiag.addEventListener('click', () => {
   diagnosticsDrawer.classList.remove('show');
 });
 
-// Robust Parser-Safe Lexical Auto-Fix Normalizer
 function autoFixJSON(raw) {
   let output = '';
   let i = 0;
@@ -1027,14 +1054,12 @@ function autoFixJSON(raw) {
   while (i < n) {
     const ch = raw[i];
 
-    // Single-line comment removal
     if (ch === '/' && raw[i + 1] === '/') {
       i += 2;
       while (i < n && raw[i] !== '\n' && raw[i] !== '\r') i++;
       continue;
     }
 
-    // Multi-line comment removal
     if (ch === '/' && raw[i + 1] === '*') {
       i += 2;
       while (i < n && !(raw[i] === '*' && raw[i + 1] === '/')) i++;
@@ -1042,7 +1067,6 @@ function autoFixJSON(raw) {
       continue;
     }
 
-    // Normal double-quoted string: pass through verbatim
     if (ch === '"') {
       output += ch;
       i++;
@@ -1067,7 +1091,6 @@ function autoFixJSON(raw) {
       continue;
     }
 
-    // Single-quoted string -> Convert to double quotes safely
     if (ch === "'") {
       output += '"';
       i++;
@@ -1101,11 +1124,9 @@ function autoFixJSON(raw) {
       continue;
     }
 
-    // Unquoted identifier keys before a colon (e.g., host: "localhost")
     if (/[a-zA-Z_$]/.test(ch)) {
       let id = '';
-      const startPos = i;
-      while (i < n && /[a-zA-Z0-9_$]/.test(raw[i])) {
+      while (i < n && /[a-zA-Z0-9_$.\-]/.test(raw[i])) {
         id += raw[i];
         i++;
       }
@@ -1119,7 +1140,6 @@ function autoFixJSON(raw) {
       continue;
     }
 
-    // Trailing comma removal preceding '}' or ']'
     if (ch === ',') {
       let lookahead = i + 1;
       while (lookahead < n && /\s/.test(raw[lookahead])) lookahead++;
@@ -1149,18 +1169,43 @@ btnDiagAutoFix.addEventListener('click', () => {
 function handleSmartCaretNavigation(key) {
   if (foldedBlocks.size === 0) return;
   const cursorPos = textarea.selectionStart;
-  const lines = textarea.value.slice(0, cursorPos).split('\n');
+  const val = textarea.value;
+  const lines = val.slice(0, cursorPos).split('\n');
   const currentLineIdx = lines.length - 1;
+  const allLines = val.split('\n');
 
   if (key === 'ArrowDown') {
     for (const [start, end] of foldedBlocks.entries()) {
       if (currentLineIdx === start) {
-        const allLines = textarea.value.split('\n');
-        const targetLineIdx = Math.min(end + 1, allLines.length - 1);
+        let targetLineIdx = end + 1;
+        while (targetLineIdx < allLines.length) {
+          const innerFold = foldedBlocks.get(targetLineIdx);
+          if (innerFold !== undefined) {
+            targetLineIdx = innerFold + 1;
+          } else {
+            break;
+          }
+        }
+        if (targetLineIdx < allLines.length) {
+          let newPos = 0;
+          for (let i = 0; i < targetLineIdx; i++) newPos += allLines[i].length + 1;
+          textarea.setSelectionRange(newPos, newPos);
+        }
+        break;
+      }
+    }
+  } else if (key === 'ArrowUp') {
+    const hiddenLines = computeHiddenLines();
+    if (currentLineIdx > 0) {
+      let targetLineIdx = currentLineIdx - 1;
+      while (targetLineIdx >= 0 && hiddenLines.has(targetLineIdx)) {
+        targetLineIdx--;
+      }
+      if (targetLineIdx >= 0 && targetLineIdx !== currentLineIdx - 1) {
         let newPos = 0;
         for (let i = 0; i < targetLineIdx; i++) newPos += allLines[i].length + 1;
+        newPos += Math.min(lines[lines.length - 1].length, allLines[targetLineIdx].length);
         textarea.setSelectionRange(newPos, newPos);
-        break;
       }
     }
   }
@@ -1223,7 +1268,6 @@ function executeTransformation(transformFn) {
   if (diag && diag.success) {
     const transformed = transformFn(diag.data);
     setEditorValue(JSON.stringify(transformed, null, 2));
-    foldedBlocks.clear();
     validate();
     render();
   } else {
@@ -1257,6 +1301,7 @@ document.querySelectorAll('#tests-menu .dropdown-item').forEach(btn => {
     if (testFixtures[testKey]) {
       setEditorValue(testFixtures[testKey], `${testKey}.json`);
       testsMenu.classList.remove('show');
+      foldedBlocks.clear();
       validate();
       render();
       toggleDiagnosticsDrawer();
@@ -1433,7 +1478,6 @@ document.getElementById('btn-format').addEventListener('click', () => {
     const formatted = formatMalformedJson(raw);
     setEditorValue(formatted);
   }
-  foldedBlocks.clear();
   validate();
   render();
 });
@@ -1541,7 +1585,7 @@ function applySearch() {
 
   while ((match = regexGlobal.exec(rawVal)) !== null) {
     if (match[0].length === 0) {
-      if (regexGlobal.lastIndex === match.index) regexGlobal.lastIndex++;
+      regexGlobal.lastIndex = match.index + 1;
       continue;
     }
     rawSearchMatches.push({
@@ -1549,25 +1593,6 @@ function applySearch() {
       end: match.index + match[0].length,
       text: match[0]
     });
-  }
-
-  const { lineStructures } = parseEditorLines(rawVal);
-  let needsReRender = false;
-
-  lineStructures.forEach((l, idx) => {
-    if (regexTest.test(l.raw)) {
-      for (const [start, end] of foldedBlocks.entries()) {
-        if (idx >= start && idx <= end) {
-          foldedBlocks.delete(start);
-          needsReRender = true;
-        }
-      }
-    }
-  });
-
-  if (needsReRender) {
-    render();
-    return;
   }
 
   const lines = editorLayer.querySelectorAll('.code-line');
@@ -1614,6 +1639,7 @@ function applySearch() {
 }
 
 function updateActiveSearchMatch() {
+  searchMatches = Array.from(editorLayer.querySelectorAll('mark.highlight'));
   searchMatches.forEach((m, i) => {
     if (i === currentSearchIdx) {
       m.classList.add('active-match');
@@ -1636,12 +1662,25 @@ function updateActiveSearchMatch() {
       m.classList.remove('active-match');
     }
   });
-  searchCount.textContent = `${currentSearchIdx + 1}/${searchMatches.length}`;
+  searchCount.textContent = `${searchMatches.length ? currentSearchIdx + 1 : 0}/${searchMatches.length}`;
 }
 
 function stepSearch(dir) {
-  if (!searchMatches.length) return;
-  currentSearchIdx = (currentSearchIdx + dir + searchMatches.length) % searchMatches.length;
+  if (!rawSearchMatches.length) return;
+  currentSearchIdx = (currentSearchIdx + dir + rawSearchMatches.length) % rawSearchMatches.length;
+  
+  const target = rawSearchMatches[currentSearchIdx];
+  const targetLine = textarea.value.slice(0, target.start).split('\n').length - 1;
+  let needsRender = false;
+  for (const [start, end] of foldedBlocks.entries()) {
+    if (targetLine >= start && targetLine <= end) {
+      foldedBlocks.delete(start);
+      needsRender = true;
+    }
+  }
+  if (needsRender) {
+    render();
+  }
   updateActiveSearchMatch();
 }
 
@@ -1750,6 +1789,7 @@ window.addEventListener('keydown', (e) => {
 function expandFoldsAtLine(lineIdx) {
   let needsRender = false;
   for (const [start, end] of foldedBlocks.entries()) {
+    // Only expand if typing STRICTLY inside hidden lines, not on the visible header line
     if (lineIdx > start && lineIdx <= end) {
       foldedBlocks.delete(start);
       needsRender = true;
@@ -1761,47 +1801,49 @@ function expandFoldsAtLine(lineIdx) {
 }
 
 textarea.addEventListener('pointerdown', (e) => {
-  if (foldedBlocks.size === 0) return;
+  const clickX = e.clientX;
+  const clickY = e.clientY;
 
-  const startX = e.clientX;
-  const startY = e.clientY;
+  const elementsUnderPoint = document.elementsFromPoint(clickX, clickY);
+  const badgeUnderClick = elementsUnderPoint.find(el => el.classList && el.classList.contains('fold-badge'));
+  if (badgeUnderClick && badgeUnderClick.dataset.start !== undefined) {
+    e.preventDefault();
+    e.stopPropagation();
+    clearSelectionHighlight();
+    const start = parseInt(badgeUnderClick.dataset.start, 10);
+    foldedBlocks.delete(start);
+    render();
+    return;
+  }
+
+  if (foldedBlocks.size === 0) return;
 
   const handlePointerUp = (upEvt) => {
     window.removeEventListener('pointerup', handlePointerUp);
     
-    const distance = Math.hypot(upEvt.clientX - startX, upEvt.clientY - startY);
+    const distance = Math.hypot(upEvt.clientX - clickX, upEvt.clientY - clickY);
     if (distance > 4) return;
 
-    const rect = textarea.getBoundingClientRect();
-    const clickY = e.clientY - rect.top;
-    const lineHeight = 22;
-    const clickedVisualLine = Math.floor(clickY / lineHeight);
+    const codeLines = Array.from(editorLayer.querySelectorAll('.code-line'));
+    let matchedRawIndex = null;
 
-    const { lineStructures } = parseEditorLines(textarea.value);
-    const hiddenLines = new Set();
-    foldedBlocks.forEach((end, start) => {
-      for (let i = start + 1; i <= end; i++) hiddenLines.add(i);
-    });
-
-    let currentVisual = 0;
-    let targetRawLine = 0;
-    for (let r = 0; r < lineStructures.length; r++) {
-      if (!hiddenLines.has(r)) {
-        if (currentVisual === clickedVisualLine) {
-          targetRawLine = r;
-          break;
-        }
-        currentVisual++;
+    for (const lineEl of codeLines) {
+      const box = lineEl.getBoundingClientRect();
+      if (clickY >= box.top - 2 && clickY <= box.bottom + 2) {
+        matchedRawIndex = parseInt(lineEl.id.replace('code-line-', ''), 10);
+        break;
       }
     }
 
-    const lines = textarea.value.split('\n');
-    let charPos = 0;
-    for (let i = 0; i < targetRawLine && i < lines.length; i++) {
-      charPos += lines[i].length + 1;
+    if (matchedRawIndex !== null) {
+      const lines = textarea.value.split('\n');
+      let charPos = 0;
+      for (let i = 0; i < matchedRawIndex && i < lines.length; i++) {
+        charPos += lines[i].length + 1;
+      }
+      textarea.setSelectionRange(charPos, charPos);
+      updateTelemetry();
     }
-    textarea.setSelectionRange(charPos, charPos);
-    updateTelemetry();
   };
 
   window.addEventListener('pointerup', handlePointerUp);
@@ -1816,40 +1858,11 @@ textarea.addEventListener('mousedown', () => {
 window.addEventListener('mouseup', () => {
   if (isSelecting) {
     isSelecting = false;
-    if (foldedBlocks.size > 0 && textarea.selectionStart !== textarea.selectionEnd) {
-      const startLine = textarea.value.slice(0, textarea.selectionStart).split('\n').length - 1;
-      const endLine = textarea.value.slice(0, textarea.selectionEnd).split('\n').length - 1;
-      
-      let needsRender = false;
-      for (const [fStart, fEnd] of foldedBlocks.entries()) {
-        if (Math.max(startLine, fStart) <= Math.min(endLine, fEnd)) {
-          foldedBlocks.delete(fStart);
-          needsRender = true;
-        }
-      }
-      if (needsRender) {
-        render();
-      }
-    }
+    updateTelemetry();
   }
 });
 
 textarea.addEventListener('select', () => {
-  if (foldedBlocks.size > 0 && textarea.selectionStart !== textarea.selectionEnd) {
-    const startLine = textarea.value.slice(0, textarea.selectionStart).split('\n').length - 1;
-    const endLine = textarea.value.slice(0, textarea.selectionEnd).split('\n').length - 1;
-
-    let needsRender = false;
-    for (const [fStart, fEnd] of foldedBlocks.entries()) {
-      if (Math.max(startLine, fStart) <= Math.min(endLine, fEnd)) {
-        foldedBlocks.delete(fStart);
-        needsRender = true;
-      }
-    }
-    if (needsRender) {
-      render();
-    }
-  }
   updateTelemetry();
 });
 
@@ -1868,18 +1881,6 @@ textarea.addEventListener('input', () => {
   });
 });
 
-let isPointerDragging = false;
-
-textarea.addEventListener('mousemove', (e) => {
-  if (e.buttons === 1 && !isPointerDragging) {
-    isPointerDragging = true;
-    if (foldedBlocks.size > 0) {
-      foldedBlocks.clear();
-      render();
-    }
-  }
-});
-
 textarea.addEventListener('keydown', (e) => {
   const start = textarea.selectionStart;
   const end = textarea.selectionEnd;
@@ -1892,6 +1893,7 @@ textarea.addEventListener('keydown', (e) => {
   }
 
   if (e.key === 'Escape') {
+    clearSelectionHighlight();
     if (diagnosticsDrawer.classList.contains('show')) {
       diagnosticsDrawer.classList.remove('show');
       return;
@@ -1909,6 +1911,10 @@ textarea.addEventListener('keydown', (e) => {
   const openPairs = { '{': '}', '[': ']', '"': '"' };
 
   if (openPairs[e.key]) {
+    if (e.key !== '"' && isInsideString(val, start)) {
+      return;
+    }
+
     if (start !== end) {
       e.preventDefault();
       const selectedText = val.substring(start, end);
