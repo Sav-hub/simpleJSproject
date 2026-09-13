@@ -341,13 +341,12 @@
       top: 0;
       left: 0;
       width: 100% !important;
-      max-width: 100% !important;
-      min-width: 100% !important;
+      min-width: 100%;
       min-height: 100%;
       padding: 12px;
       margin: 0;
       white-space: pre-wrap !important;
-      word-break: break-all !important; /* Guarantees long URLs/strings break across lines */
+      word-break: break-all !important;
       overflow-wrap: break-word !important;
       tab-size: 2;
       font-family: var(--font-family);
@@ -357,6 +356,20 @@
       word-spacing: normal;
       box-sizing: border-box;
       -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+    }
+
+    /* Keep text 100% invisible during selection while showing highlight color */
+    #json-textarea::selection {
+      background: rgba(99, 102, 241, 0.35) !important;
+      color: transparent !important;
+      -webkit-text-fill-color: transparent !important;
+    }
+
+    #json-textarea::-moz-selection {
+      background: rgba(99, 102, 241, 0.35) !important;
+      color: transparent !important;
     }
 
     #json-textarea {

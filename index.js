@@ -1642,33 +1642,40 @@ document.getElementById('btn-format').addEventListener('click', () => {
   textarea.addEventListener('pointerdown', (e) => {
     if (foldedBlocks.size === 0) return;
 
-    // Calculate clicked visual line from click Y coordinate
-    const rect = textarea.getBoundingClientRect();
-    const clickY = e.clientY - rect.top;
-    const lineHeight = 22; // matches var(--line-height)
-    const clickedVisualLine = Math.floor(clickY / lineHeight);
+    const startX = e.clientX;
+    const startY = e.clientY;
 
-    // Map visual line index to raw buffer line index
-    const { lineStructures } = parseEditorLines(textarea.value);
-    const hiddenLines = new Set();
-    foldedBlocks.forEach((end, start) => {
-      for (let i = start + 1; i <= end; i++) hiddenLines.add(i);
-    });
+    const handlePointerUp = (upEvt) => {
+      window.removeEventListener('pointerup', handlePointerUp);
+      
+      // If mouse moved more than 4px, it was a drag selection, not a single click
+      const distance = Math.hypot(upEvt.clientX - startX, upEvt.clientY - startY);
+      if (distance > 4) return;
 
-    let currentVisual = 0;
-    let targetRawLine = 0;
-    for (let r = 0; r < lineStructures.length; r++) {
-      if (!hiddenLines.has(r)) {
-        if (currentVisual === clickedVisualLine) {
-          targetRawLine = r;
-          break;
+      // Single click: map visual line to buffer line
+      const rect = textarea.getBoundingClientRect();
+      const clickY = e.clientY - rect.top;
+      const lineHeight = 22;
+      const clickedVisualLine = Math.floor(clickY / lineHeight);
+
+      const { lineStructures } = parseEditorLines(textarea.value);
+      const hiddenLines = new Set();
+      foldedBlocks.forEach((end, start) => {
+        for (let i = start + 1; i <= end; i++) hiddenLines.add(i);
+      });
+
+      let currentVisual = 0;
+      let targetRawLine = 0;
+      for (let r = 0; r < lineStructures.length; r++) {
+        if (!hiddenLines.has(r)) {
+          if (currentVisual === clickedVisualLine) {
+            targetRawLine = r;
+            break;
+          }
+          currentVisual++;
         }
-        currentVisual++;
       }
-    }
 
-    // Set cursor to the beginning of the targeted raw line
-    setTimeout(() => {
       const lines = textarea.value.split('\n');
       let charPos = 0;
       for (let i = 0; i < targetRawLine && i < lines.length; i++) {
@@ -1676,7 +1683,58 @@ document.getElementById('btn-format').addEventListener('click', () => {
       }
       textarea.setSelectionRange(charPos, charPos);
       updateTelemetry();
-    }, 0);
+    };
+
+    window.addEventListener('pointerup', handlePointerUp);
+  });
+
+  let isSelecting = false;
+
+  textarea.addEventListener('mousedown', (e) => {
+    isSelecting = true;
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (isSelecting) {
+      isSelecting = false;
+      // If user selected text across folded lines, unfold them to keep selection aligned
+      if (foldedBlocks.size > 0 && textarea.selectionStart !== textarea.selectionEnd) {
+        const startLine = textarea.value.slice(0, textarea.selectionStart).split('\n').length - 1;
+        const endLine = textarea.value.slice(0, textarea.selectionEnd).split('\n').length - 1;
+        
+        let needsRender = false;
+        for (const [fStart, fEnd] of foldedBlocks.entries()) {
+          // Check if selection overlaps with this fold
+          if (Math.max(startLine, fStart) <= Math.min(endLine, fEnd)) {
+            foldedBlocks.delete(fStart);
+            needsRender = true;
+          }
+        }
+        if (needsRender) {
+          render();
+        }
+      }
+    }
+  });
+
+  textarea.addEventListener('select', () => {
+    // If double-click or select-all occurs inside/across a fold
+    if (foldedBlocks.size > 0 && textarea.selectionStart !== textarea.selectionEnd) {
+      const startLine = textarea.value.slice(0, textarea.selectionStart).split('\n').length - 1;
+      const endLine = textarea.value.slice(0, textarea.selectionEnd).split('\n').length - 1;
+
+      let needsRender = false;
+      for (const [fStart, fEnd] of foldedBlocks.entries()) {
+        if (Math.max(startLine, fStart) <= Math.min(endLine, fEnd)) {
+          foldedBlocks.delete(fStart);
+          needsRender = true;
+        }
+      }
+      if (needsRender) {
+        render();
+      }
+    }
+    updateTelemetry();
   });
 
   textarea.addEventListener('input', () => {
@@ -1688,10 +1746,36 @@ document.getElementById('btn-format').addEventListener('click', () => {
     render();
   });
 
-  ['click', 'keyup', 'focus', 'select'].forEach(evt => {
+  ['click', 'keyup', 'focus'].forEach(evt => {
     textarea.addEventListener(evt, () => {
       updateTelemetry();
     });
+  });
+
+  // Expand folds immediately when selecting text to avoid coordinate and visual overlap
+  textarea.addEventListener('select', () => {
+    if (foldedBlocks.size > 0 && textarea.selectionStart !== textarea.selectionEnd) {
+      foldedBlocks.clear();
+      render();
+    }
+    updateTelemetry();
+  });
+
+  // If user begins dragging to select text, expand active folds
+  let isPointerDragging = false;
+
+  textarea.addEventListener('mousedown', (e) => {
+    isPointerDragging = false;
+  });
+
+  textarea.addEventListener('mousemove', (e) => {
+    if (e.buttons === 1 && !isPointerDragging) {
+      isPointerDragging = true;
+      if (foldedBlocks.size > 0) {
+        foldedBlocks.clear();
+        render();
+      }
+    }
   });
 
   textarea.addEventListener('keydown', (e) => {
