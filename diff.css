@@ -166,6 +166,7 @@
     .main-view {
       flex: 1;
       min-height: 0;
+      overflow: hidden;
     }
 
     .app-container {
@@ -231,9 +232,8 @@
     }
 
     .line-numbers {
-      width: 48px;
-      padding: 14px 6px 14px 0;
-      text-align: right;
+      width: 52px;
+      padding: 14px 0;
       background: var(--gutter-bg);
       color: var(--text-muted);
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -246,8 +246,12 @@
     }
     .line-numbers div {
       height: 19.5px;
-      padding-right: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0 8px 0 6px;
       position: relative;
+      box-sizing: border-box;
     }
 
     .line-numbers div.gutter-add {
@@ -255,13 +259,13 @@
       color: #4ade80;
       font-weight: 700;
     }
-    .line-numbers div.gutter-add::after {
+    .line-numbers div.gutter-add::before {
       content: "+";
       position: absolute;
-      right: 2px;
-      top: 0;
-      font-weight: bold;
+      left: 6px;
+      font-weight: 700;
       color: #4ade80;
+      line-height: 1;
     }
 
     .line-numbers div.gutter-del {
@@ -269,13 +273,13 @@
       color: #f87171;
       font-weight: 700;
     }
-    .line-numbers div.gutter-del::after {
+    .line-numbers div.gutter-del::before {
       content: "-";
       position: absolute;
-      right: 2px;
-      top: 0;
-      font-weight: bold;
+      left: 6px;
+      font-weight: 700;
       color: #f87171;
+      line-height: 1;
     }
 
     .line-numbers div.gutter-mod {
@@ -283,13 +287,13 @@
       color: #facc15;
       font-weight: 700;
     }
-    .line-numbers div.gutter-mod::after {
+    .line-numbers div.gutter-mod::before {
       content: "~";
       position: absolute;
-      right: 2px;
-      top: 0;
-      font-weight: bold;
+      left: 6px;
+      font-weight: 700;
       color: #facc15;
+      line-height: 1;
     }
 
     .textarea-container {
