@@ -166,21 +166,17 @@
     .main-view {
       flex: 1;
       min-height: 0;
-      padding: 12px 14px;
-      overflow: hidden;
     }
 
     .app-container {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 14px;
       height: 100%;
     }
 
     .pane {
       background: var(--panel-bg);
       border: 1px solid var(--border);
-      border-radius: 8px;
       display: flex;
       flex-direction: column;
       overflow: hidden;
