@@ -18,7 +18,7 @@ const gutter = document.getElementById('gutter');
 const gutterContent = document.getElementById('gutter-content');
 const viewport = document.getElementById('viewport');
 const themeToggleBtn = document.getElementById('theme-toggle-btn');
-const activeFilenameEl = document.getElementById('active-filename');
+// const activeFilenameEl = document.getElementById('active-filename');
 const fileInput = document.getElementById('file-input');
 const dropOverlay = document.getElementById('drop-overlay');
 
@@ -103,7 +103,6 @@ if (!document.getElementById('caret-blink-style')) {
 function applyTheme(isDark) {
   document.body.classList.toggle('dark-theme', isDark);
   document.getElementById('theme-icon').textContent = isDark ? '☀️' : '🌙';
-  document.getElementById('theme-label').textContent = isDark ? 'Grey Theme' : 'Dark Theme';
   localStorage.setItem('json_theme', isDark ? 'dark' : 'grey');
 }
 themeToggleBtn.addEventListener('click', () => {
@@ -124,10 +123,10 @@ function setEditorValue(newVal, newFilename = null) {
   textarea.focus();
   textarea.setSelectionRange(0, textarea.value.length);
   textarea.setRangeText(cleanVal, 0, textarea.value.length, 'end');
-  if (newFilename) {
-    activeFilename = newFilename;
-    activeFilenameEl.textContent = `(${newFilename})`;
-  }
+  // if (newFilename) {
+  //   activeFilename = newFilename;
+  //   activeFilenameEl.textContent = `(${newFilename})`;
+  // }
   textarea.dispatchEvent(new Event('input', { bubbles: true }));
 }
 

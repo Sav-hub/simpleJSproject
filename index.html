@@ -23,7 +23,6 @@
         <a href="index.html" class="active-lang">JSON</a>
         <a href="xml-viewer.html" class="inactive-lang">XML</a>
       </div>
-      <p class="lang-label">Language</p>
     </div>
 
     <!-- Mode Links -->
@@ -42,11 +41,6 @@
     <div class="pane">
       
       <div class="header">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span>Editor</span>
-          <span id="active-filename" style="font-weight: normal; font-size: 11px; color: var(--text-muted); font-family: monospace;"></span>
-        </div>
-
         <div class="actions">
           <input type="file" id="file-input"  accept=".json,application/json,text/plain" aria-label="Upload JSON file" style="display: none;" />
           
@@ -183,7 +177,11 @@
             <span id="diagnostic-text">Valid JSON</span>
           </div>
         </div>
-
+        <div class="footer-left">
+          <span class="privacy-note">
+            🔒 <strong>100% Client-Side</strong> <span class="dim">— Zero server uploads. Data never leaves your browser.</span>
+          </span>
+        </div>
         <div class="status-right">
           <div class="telemetry-chip interactive" id="tel-cursor" title="Cursor Line & Column">Ln <span>1</span>, Col <span>1</span></div>
           <div class="telemetry-chip" id="tel-selection" style="display: none;">(<span id="tel-sel-count">0</span> selected)</div>
@@ -196,28 +194,6 @@
 
     </div>
   </main>
-<footer class="app-footer">
-    <div class="footer-left">
-      <div class="engine-status">
-        <span class="pulse-dot" title="Running locally in browser memory"></span>
-        <code>&gt;_ Local Engine</code>
-      </div>
-      <span class="sep">|</span>
-      <span class="privacy-note">
-        🔒 <strong>100% Client-Side</strong> <span class="dim">— Zero server uploads. Data never leaves your browser.</span>
-      </span>
-    </div>
-    <div class="footer-right">
-      <div class="metric-tags">
-        <span>Zero Latency</span>
-        <span class="dot">•</span>
-        <span>No Tracking</span>
-        <span class="dot">•</span>
-        <span>In-Memory Only</span>
-      </div>
-      <span class="footer-badge">⚡ Private &amp; Offline</span>
-    </div>
-  </footer>
 <script src="index.js" ></script>
 </body>
 </html>
