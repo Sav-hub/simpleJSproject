@@ -266,7 +266,8 @@
       left: 6px;
       top: 0;
       font-weight: 700;
-      color: #4ade80;
+      color: #000;
+      background-color: #4ade88;
       line-height: 19.5px;
     }
 
@@ -280,7 +281,8 @@
       left: 6px;
       top: 0;
       font-weight: 700;
-      color: #f87171;
+      color: #000;
+      background-color: #f87178;
       line-height: 19.5px;
     }
 
@@ -294,7 +296,8 @@
       left: 6px;
       top: 0;
       font-weight: 700;
-      color: #facc15;
+      color: #000;
+      background-color: #facc15;
       line-height: 19.5px;
     }
 
