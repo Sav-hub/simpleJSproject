@@ -123,7 +123,7 @@ function escapeHtml(str) {
 }
 
 function tokenize(str) {
-  return str.match(/([a-zA-Z0-9_]+|\s+|[^\s\w])/g) || [];
+  return str.match(/(".*?"|[a-zA-Z0-9_]+|\s+|[^\s\w])/g) || [];
 }
 
 function computeInlineTokens(tokensA, tokensB) {
@@ -142,17 +142,17 @@ function computeInlineTokens(tokensA, tokensB) {
   }
 
   let i = n, j = m;
-  const diffA = new Map();
-  const diffB = new Map();
+  const diffA = new Set();
+  const diffB = new Set();
 
   while (i > 0 || j > 0) {
     if (i > 0 && j > 0 && tokensA[i - 1] === tokensB[j - 1]) {
       i--; j--;
     } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      diffB.set(j - 1, true);
+      diffB.add(j - 1);
       j--;
     } else if (i > 0 && (j === 0 || dp[i][j - 1] < dp[i - 1][j])) {
-      diffA.set(i - 1, true);
+      diffA.add(i - 1);
       i--;
     }
   }
@@ -191,75 +191,80 @@ function computeLineDiff(linesA, linesB) {
     }
   }
 
-  const pairedMods = new Map();
+  // Correlate corresponding keys: handles optional spacing before the colon and 1-to-1 match reservation
+  const pairedModsA = new Map();
+  const pairedModsB = new Map();
+  const matchedRightIndices = new Set();
+
   diffA.forEach((typeA, idxA) => {
     const lineA = linesA[idxA].trim();
-    const matchA = lineA.match(/"([^"]+)":/);
+    const matchA = lineA.match(/"([^"]+)"\s*:/);
     if (matchA) {
       const keyA = matchA[1];
-      diffB.forEach((typeB, idxB) => {
-        const lineB = linesB[idxB].trim();
-        const matchB = lineB.match(/"([^"]+)":/);
-        if (matchB && matchB[1] === keyA) {
-          diffA.set(idxA, 'MOD');
-          diffB.set(idxB, 'MOD');
-          pairedMods.set(idxA, idxB);
+      for (const [idxB, typeB] of diffB.entries()) {
+        if (!matchedRightIndices.has(idxB)) {
+          const lineB = linesB[idxB].trim();
+          const matchB = lineB.match(/"([^"]+)"\s*:/);
+          if (matchB && matchB[1] === keyA) {
+            diffA.set(idxA, 'MOD');
+            diffB.set(idxB, 'MOD');
+            pairedModsA.set(idxA, idxB);
+            pairedModsB.set(idxB, idxA);
+            matchedRightIndices.add(idxB);
+            break;
+          }
         }
-      });
+      }
     }
   });
 
-  return { diffA, diffB, pairedMods };
+  return { diffA, diffB, pairedModsA, pairedModsB };
 }
 
-function renderHighlightedTokens(lineText, type, pairedLineText, filterActive) {
-  if (!filterActive || !type) {
-    return escapeHtml(lineText);
-  }
-
-  if (type === 'DEL' && !pairedLineText) {
-    const trimmed = lineText.trim();
-    if (!trimmed) return escapeHtml(lineText);
-    const leading = lineText.match(/^\s*/)[0];
-    const trailing = lineText.match(/\s*$/)[0];
-    const core = lineText.slice(leading.length, lineText.length - trailing.length);
-    return `${escapeHtml(leading)}<mark class="diff-token-del">${escapeHtml(core)}</mark>${escapeHtml(trailing)}`;
-  }
-
-  if (type === 'ADD' && !pairedLineText) {
-    const trimmed = lineText.trim();
-    if (!trimmed) return escapeHtml(lineText);
-    const leading = lineText.match(/^\s*/)[0];
-    const trailing = lineText.match(/\s*$/)[0];
-    const core = lineText.slice(leading.length, lineText.length - trailing.length);
-    return `${escapeHtml(leading)}<mark class="diff-token-add">${escapeHtml(core)}</mark>${escapeHtml(trailing)}`;
-  }
-
-  const tokensThis = tokenize(lineText);
-  const tokensOther = tokenize(pairedLineText);
-  const { diffA, diffB } = computeInlineTokens(tokensThis, tokensOther);
-  const markMap = (type === 'DEL' || type === 'MOD') ? diffA : diffB;
-  const highlightClass = type === 'MOD' ? 'diff-token-mod' : (type === 'DEL' ? 'diff-token-del' : 'diff-token-add');
-
-  return tokensThis.map((tok, idx) => {
-    if (markMap.has(idx) && tok.trim().length > 0) {
+function renderTokens(tokens, changeSet, highlightClass) {
+  return tokens.map((tok, idx) => {
+    if (changeSet && changeSet.has(idx)) {
+      if (!tok.trim()) return escapeHtml(tok);
       return `<mark class="${highlightClass}">${escapeHtml(tok)}</mark>`;
     }
     return escapeHtml(tok);
   }).join('');
 }
 
+function renderHighlightedTokens(lineText, type, pairedLineText, isFilterActive, isLeft) {
+  if (!isFilterActive || !type) {
+    return escapeHtml(lineText);
+  }
+
+  if (!pairedLineText) {
+    const highlightClass = type === 'DEL' ? 'diff-token-del' : 'diff-token-add';
+    const leading = lineText.match(/^\s*/)[0];
+    const trailing = lineText.match(/\s*$/)[0];
+    const core = lineText.slice(leading.length, lineText.length - trailing.length);
+    if (!core) return escapeHtml(lineText);
+    return `${escapeHtml(leading)}<mark class="${highlightClass}">${escapeHtml(core)}</mark>${escapeHtml(trailing)}`;
+  }
+
+  const tokensThis = tokenize(lineText);
+  const tokensOther = tokenize(pairedLineText);
+  const { diffA, diffB } = computeInlineTokens(tokensThis, tokensOther);
+  const activeChangeSet = isLeft ? diffA : diffB;
+  return renderTokens(tokensThis, activeChangeSet, 'diff-token-mod');
+}
+
 function executeLineByLineDiff() {
   const rawA = diffInputLeft.value;
   const rawB = diffInputRight.value;
-  const linesA = rawA.split('\n');
-  const linesB = rawB.split('\n');
 
-  const { diffA, diffB, pairedMods } = computeLineDiff(linesA, linesB);
+  // Prevent phantom line 1 in empty input fields
+  const linesA = rawA.length > 0 ? rawA.split('\n') : [];
+  const linesB = rawB.length > 0 ? rawB.split('\n') : [];
+
+  const { diffA, diffB, pairedModsA, pairedModsB } = computeLineDiff(linesA, linesB);
 
   let countAdd = 0, countDel = 0, countMod = 0;
 
-  // Render left backdrop lines
+  // 1. Render left backdrop lines
   let backdropHtmlA = '';
   for (let i = 0; i < linesA.length; i++) {
     const type = diffA.get(i);
@@ -273,14 +278,14 @@ function executeLineByLineDiff() {
       countMod++;
     }
 
-    const pairedIdx = pairedMods.get(i);
+    const pairedIdx = pairedModsA.get(i);
     const pairedText = pairedIdx !== undefined ? linesB[pairedIdx] : null;
-    const highlightedContent = renderHighlightedTokens(linesA[i], type, pairedText, isFilterActive);
-    backdropHtmlA += `<div class="backdrop-line">${highlightedContent || '&nbsp;'}</div>`;
+    const content = renderHighlightedTokens(linesA[i], type, pairedText, isFilterActive, true);
+    backdropHtmlA += `<div class="backdrop-line">${content || '&nbsp;'}</div>`;
   }
   diffBackdropLeft.innerHTML = backdropHtmlA;
 
-  // Render right backdrop lines
+  // 2. Render right backdrop lines
   let backdropHtmlB = '';
   for (let j = 0; j < linesB.length; j++) {
     const type = diffB.get(j);
@@ -293,16 +298,14 @@ function executeLineByLineDiff() {
       isFilterActive = (activeDiffFilter === 'ALL' || activeDiffFilter === 'MOD');
     }
 
-    let pairedText = null;
-    for (const [idxA, idxB] of pairedMods.entries()) {
-      if (idxB === j) { pairedText = linesA[idxA]; break; }
-    }
-    const highlightedContent = renderHighlightedTokens(linesB[j], type, pairedText, isFilterActive);
-    backdropHtmlB += `<div class="backdrop-line">${highlightedContent || '&nbsp;'}</div>`;
+    const pairedIdx = pairedModsB.get(j);
+    const pairedText = pairedIdx !== undefined ? linesA[pairedIdx] : null;
+    const content = renderHighlightedTokens(linesB[j], type, pairedText, isFilterActive, false);
+    backdropHtmlB += `<div class="backdrop-line">${content || '&nbsp;'}</div>`;
   }
   diffBackdropRight.innerHTML = backdropHtmlB;
 
-  // Sync line number heights directly to the actual rendered backdrop line heights
+  // 3. Render Gutters strictly mapped to actual line count & measured heights
   const renderedLinesA = diffBackdropLeft.children;
   let gutterHtmlA = '';
   for (let i = 0; i < linesA.length; i++) {
