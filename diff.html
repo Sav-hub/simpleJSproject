@@ -23,7 +23,6 @@
           <a href="diff.html" class="active-lang">JSON</a>
           <a href="xml-diff.html" class="inactive-lang">XML</a>
         </div>
-        <p class="lang-label">Language</p>
       </div>
 
       <a href="index.html" class="tab-link" id="nav-to-viewer">🛠 Viewer & Tree</a>
@@ -31,7 +30,6 @@
       
       <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Theme">
         <span id="theme-icon">🌙</span>
-        <span id="theme-label">Dark Theme</span>
       </button>
     </div>
   </header>
@@ -41,7 +39,7 @@
       <!-- Left Pane -->
       <div class="pane">
         <div class="header">
-          <span>Original (Left) JSON</span>
+          <span>Original JSON</span>
           <div class="actions">
             <button class="sync-scroll-btn active" id="btn-sync-scroll" title="Synchronize scrolling between both editors">
               <span class="status-dot"></span>
@@ -68,16 +66,16 @@
       <div class="pane">
         <div class="header">
           <div style="display:flex; align-items:center; gap:8px;">
-            <span>Modified (Right) JSON</span>
+            <span>Modified JSON</span>
             <div class="diff-filters">
               <button class="filter-btn filter-all active" id="filter-btn-all">All</button>
-              <button class="filter-btn filter-add" id="filter-btn-add">+0 Added</button>
-              <button class="filter-btn filter-del" id="filter-btn-del">-0 Removed</button>
-              <button class="filter-btn filter-mod" id="filter-btn-mod">~0 Modified</button>
+              <button class="filter-btn filter-add" id="filter-btn-add">+ 0</button>
+              <button class="filter-btn filter-del" id="filter-btn-del">- 0</button>
+              <button class="filter-btn filter-mod" id="filter-btn-mod">~ 0</button>
             </div>
           </div>
           <div class="actions">
-            <button id="btn-diff-swap">⇄ Swap</button>
+            <button id="btn-diff-swap">⇄</button>
             <button class="icon-btn primary" id="btn-diff-format-right" title="Format Right">
               <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
             </button>

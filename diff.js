@@ -4,17 +4,14 @@ const themeSyncChannel = new BroadcastChannel('theme_sync_channel');
 
 const themeToggleBtn = document.getElementById('theme-toggle-btn');
 const themeIcon = document.getElementById('theme-icon');
-const themeLabel = document.getElementById('theme-label');
 
 function applyTheme(themeName, broadcast = false) {
   if (themeName === 'dark') {
     document.body.classList.add('dark-theme');
     themeIcon.textContent = '☀️';
-    themeLabel.textContent = 'Grey Theme';
   } else {
     document.body.classList.remove('dark-theme');
     themeIcon.textContent = '🌙';
-    themeLabel.textContent = 'Dark Theme';
   }
   localStorage.setItem('json_studio_theme', themeName);
 
@@ -227,9 +224,9 @@ function executeLineByLineDiff() {
   diffLinesRight.innerHTML = gutterHtmlB;
   diffBackdropRight.innerHTML = backdropHtmlB;
 
-  filterBtnAdd.textContent = ` + ${countAdd} Added`;
-  filterBtnDel.textContent = ` - ${countDel} Removed`;
-  filterBtnMod.textContent = ` ~ ${countMod} Modified`;
+  filterBtnAdd.textContent = ` + ${countAdd} `;
+  filterBtnDel.textContent = ` - ${countDel} `;
+  filterBtnMod.textContent = ` ~ ${countMod} `;
 }
 
 function setDiffFilter(filterType) {

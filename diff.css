@@ -177,7 +177,6 @@
 
     .pane {
       background: var(--panel-bg);
-      border: 1px solid var(--border);
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -241,17 +240,20 @@
       line-height: 1.5;
       user-select: none;
       border-right: 1px solid var(--border);
-      overflow: hidden;
+      overflow-y: hidden;
+      overflow-x: hidden;
       z-index: 3;
+      flex-shrink: 0;
     }
     .line-numbers div {
-      height: 19.5px;
+      min-height: 19.5px;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: flex-end;
       padding: 0 8px 0 6px;
       position: relative;
       box-sizing: border-box;
+      line-height: 19.5px;
     }
 
     .line-numbers div.gutter-add {
@@ -263,9 +265,10 @@
       content: "+";
       position: absolute;
       left: 6px;
+      top: 0;
       font-weight: 700;
       color: #4ade80;
-      line-height: 1;
+      line-height: 19.5px;
     }
 
     .line-numbers div.gutter-del {
@@ -277,9 +280,10 @@
       content: "-";
       position: absolute;
       left: 6px;
+      top: 0;
       font-weight: 700;
       color: #f87171;
-      line-height: 1;
+      line-height: 19.5px;
     }
 
     .line-numbers div.gutter-mod {
@@ -291,9 +295,10 @@
       content: "~";
       position: absolute;
       left: 6px;
+      top: 0;
       font-weight: 700;
       color: #facc15;
-      line-height: 1;
+      line-height: 19.5px;
     }
 
     .textarea-container {
@@ -302,7 +307,7 @@
       overflow: hidden;
     }
 
-    .backdrop-layer, textarea {
+    .backdrop-layer, textarea, #diff-measure-mirror {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 13px;
       line-height: 1.5;
@@ -310,7 +315,8 @@
       margin: 0;
       border: 0;
       box-sizing: border-box;
-      white-space: pre;
+      white-space: pre-wrap;
+      word-break: break-all;
       letter-spacing: 0;
       tab-size: 2;
     }
@@ -331,15 +337,16 @@
       color: var(--text);
       resize: none;
       outline: none;
-      overflow-wrap: normal;
-      overflow-x: auto;
+      overflow-y: auto;
+      overflow-x: hidden;
       z-index: 2;
     }
 
     .diff-line-bg {
-      height: 19.5px;
+      min-height: 19.5px;
       display: block;
       width: 100%;
+      box-sizing: border-box;
     }
     .diff-line-bg.line-added {
       background-color: var(--diff-add-bg);
@@ -352,6 +359,14 @@
     .diff-line-bg.line-modified {
       background-color: var(--diff-mod-bg);
       border-left: 3px solid var(--diff-mod-gutter);
+    }
+
+    #diff-measure-mirror {
+      position: absolute;
+      visibility: hidden;
+      top: -9999px;
+      left: -9999px;
+      pointer-events: none;
     }
 
     button.sync-scroll-btn {
