@@ -1,4 +1,5 @@
 // 1. Broadcast Channels Setup
+const CHANNEL_ID = 'json_diff_tab_' + Math.random().toString(36).substring(2, 9);
 const jsonSyncChannel = new BroadcastChannel('json_sync_channel');
 const themeSyncChannel = new BroadcastChannel('theme_sync_channel');
 
@@ -8,10 +9,10 @@ const themeIcon = document.getElementById('theme-icon');
 function applyTheme(themeName, broadcast = false) {
   if (themeName === 'dark') {
     document.body.classList.add('dark-theme');
-    themeIcon.textContent = '☀️';
+    if (themeIcon) themeIcon.textContent = '☀️';
   } else {
     document.body.classList.remove('dark-theme');
-    themeIcon.textContent = '🌙';
+    if (themeIcon) themeIcon.textContent = '🌙';
   }
   localStorage.setItem('json_studio_theme', themeName);
 
@@ -20,10 +21,12 @@ function applyTheme(themeName, broadcast = false) {
   }
 }
 
-themeToggleBtn.addEventListener('click', () => {
-  const isDark = document.body.classList.contains('dark-theme');
-  applyTheme(isDark ? 'grey' : 'dark', true);
-});
+if (themeToggleBtn) {
+  themeToggleBtn.addEventListener('click', () => {
+    const isDark = document.body.classList.contains('dark-theme');
+    applyTheme(isDark ? 'grey' : 'dark', true);
+  });
+}
 
 themeSyncChannel.onmessage = (e) => {
   if (e.data?.type === 'SET_THEME' && e.data.theme) {
@@ -33,6 +36,7 @@ themeSyncChannel.onmessage = (e) => {
 
 applyTheme(localStorage.getItem('json_studio_theme') || 'grey', false);
 
+// DOM References
 const diffInputLeft = document.getElementById('diff-input-left');
 const diffInputRight = document.getElementById('diff-input-right');
 const diffLinesLeft = document.getElementById('diff-lines-left');
@@ -53,6 +57,7 @@ const btnJumpNext = document.getElementById('btn-jump-next');
 const diffJumpCounter = document.getElementById('diff-jump-counter');
 const btnClearAll = document.getElementById('btn-diff-clear-all');
 const btnSortKeys = document.getElementById('btn-diff-sort-keys');
+const btnDiffSwap = document.getElementById('btn-diff-swap');
 
 let syncScrollEnabled = true;
 let isProgrammaticScrolling = false;
@@ -61,17 +66,37 @@ let activeDiffFilter = 'ALL';
 
 let jumpDeltas = [];
 let currentJumpIndex = -1;
+let debounceDiffTimer = null;
 
-navToViewer.addEventListener('click', () => {
-  const content = diffInputLeft.value.trim();
-  if (content.startsWith('{') || content.startsWith('[')) {
-    sessionStorage.setItem('shared_json_left', diffInputLeft.value);
-  }
-});
+if (navToViewer) {
+  navToViewer.addEventListener('click', () => {
+    const content = diffInputLeft.value.trim();
+    if (content.startsWith('{') || content.startsWith('[')) {
+      sessionStorage.setItem('shared_json_left', diffInputLeft.value);
+    }
+  });
+}
 
-btnSyncScroll.addEventListener('click', () => {
-  syncScrollEnabled = !syncScrollEnabled;
-  btnSyncScroll.classList.toggle('active', syncScrollEnabled);
+if (btnSyncScroll) {
+  btnSyncScroll.addEventListener('click', () => {
+    syncScrollEnabled = !syncScrollEnabled;
+    btnSyncScroll.classList.toggle('active', syncScrollEnabled);
+  });
+}
+
+// Tab indentation handling
+[diffInputLeft, diffInputRight].forEach((ta) => {
+  if (!ta) return;
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      ta.value = ta.value.substring(0, start) + '  ' + ta.value.substring(end);
+      ta.selectionStart = ta.selectionEnd = start + 2;
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  });
 });
 
 // Hardware-Accelerated Leader-Follower Sync
@@ -79,6 +104,7 @@ let activeScrollSource = null;
 let scrollReleaseTimer = null;
 
 function claimScrollDriver(source) {
+  isProgrammaticScrolling = false;
   activeScrollSource = source;
   clearTimeout(scrollReleaseTimer);
   scrollReleaseTimer = setTimeout(() => {
@@ -87,69 +113,100 @@ function claimScrollDriver(source) {
 }
 
 function updatePositions(target, top) {
-  const gutter = target === 'left' ? diffLinesLeft.firstElementChild : diffLinesRight.firstElementChild;
-  const backdrop = target === 'left' ? diffBackdropLeft.firstElementChild : diffBackdropRight.firstElementChild;
+  const gutter = target === 'left' ? diffLinesLeft?.firstElementChild : diffLinesRight?.firstElementChild;
+  const backdrop = target === 'left' ? diffBackdropLeft?.firstElementChild : diffBackdropRight?.firstElementChild;
 
   if (gutter) gutter.style.transform = `translate3d(0, ${-top}px, 0)`;
   if (backdrop) backdrop.style.transform = `translate3d(0, ${-top}px, 0)`;
 }
 
-diffInputLeft.addEventListener('wheel', () => claimScrollDriver('left'), { passive: true });
-diffInputLeft.addEventListener('mouseenter', () => claimScrollDriver('left'), { passive: true });
-diffInputLeft.addEventListener('pointerdown', () => claimScrollDriver('left'), { passive: true });
+// Match backdrop content width to textarea client width
+function syncBackdropWidths() {
+  if (!diffInputLeft || !diffInputRight || !diffBackdropLeft || !diffBackdropRight) return;
+  const contentA = diffBackdropLeft.firstElementChild;
+  const contentB = diffBackdropRight.firstElementChild;
 
-diffInputRight.addEventListener('wheel', () => claimScrollDriver('right'), { passive: true });
-diffInputRight.addEventListener('mouseenter', () => claimScrollDriver('right'), { passive: true });
-diffInputRight.addEventListener('pointerdown', () => claimScrollDriver('right'), { passive: true });
-
-diffInputLeft.addEventListener('scroll', () => {
-  const top = diffInputLeft.scrollTop;
-  updatePositions('left', top);
-
-  if (isProgrammaticScrolling) return;
-
-  if (syncScrollEnabled && (activeScrollSource === 'left' || !activeScrollSource)) {
-    claimScrollDriver('left');
-    diffInputRight.scrollTop = top;
-    updatePositions('right', top);
-  }
-}, { passive: true });
-
-diffInputRight.addEventListener('scroll', () => {
-  const top = diffInputRight.scrollTop;
-  updatePositions('right', top);
-
-  if (isProgrammaticScrolling) return;
-
-  if (syncScrollEnabled && (activeScrollSource === 'right' || !activeScrollSource)) {
-    claimScrollDriver('right');
-    diffInputLeft.scrollTop = top;
-    updatePositions('left', top);
-  }
-}, { passive: true });
-
-function handleLeftInput(broadcast = true) {
-  sessionStorage.setItem('shared_json_left', diffInputLeft.value);
-  if (broadcast) {
-    jsonSyncChannel.postMessage({
-      type: 'UPDATE_JSON',
-      payload: diffInputLeft.value
-    });
-  }
-  executeLineByLineDiff();
+  if (contentA) contentA.style.width = `${diffInputLeft.clientWidth}px`;
+  if (contentB) contentB.style.width = `${diffInputRight.clientWidth}px`;
 }
 
-diffInputLeft.addEventListener('input', () => handleLeftInput(true));
-diffInputRight.addEventListener('input', executeLineByLineDiff);
+if (diffInputLeft) {
+  diffInputLeft.addEventListener('wheel', () => claimScrollDriver('left'), { passive: true });
+  diffInputLeft.addEventListener('mouseenter', () => claimScrollDriver('left'), { passive: true });
+  diffInputLeft.addEventListener('pointerdown', () => claimScrollDriver('left'), { passive: true });
+
+  diffInputLeft.addEventListener('scroll', () => {
+    const top = diffInputLeft.scrollTop;
+    updatePositions('left', top);
+
+    if (isProgrammaticScrolling) return;
+
+    if (syncScrollEnabled && (activeScrollSource === 'left' || !activeScrollSource) && diffInputRight) {
+      claimScrollDriver('left');
+      diffInputRight.scrollTop = top;
+      updatePositions('right', top);
+    }
+  }, { passive: true });
+}
+
+if (diffInputRight) {
+  diffInputRight.addEventListener('wheel', () => claimScrollDriver('right'), { passive: true });
+  diffInputRight.addEventListener('mouseenter', () => claimScrollDriver('right'), { passive: true });
+  diffInputRight.addEventListener('pointerdown', () => claimScrollDriver('right'), { passive: true });
+
+  diffInputRight.addEventListener('scroll', () => {
+    const top = diffInputRight.scrollTop;
+    updatePositions('right', top);
+
+    if (isProgrammaticScrolling) return;
+
+    if (syncScrollEnabled && (activeScrollSource === 'right' || !activeScrollSource) && diffInputLeft) {
+      claimScrollDriver('right');
+      diffInputLeft.scrollTop = top;
+      updatePositions('left', top);
+    }
+  }, { passive: true });
+}
+
+function debouncedExecuteDiff() {
+  clearTimeout(debounceDiffTimer);
+  debounceDiffTimer = setTimeout(() => {
+    executeLineByLineDiff();
+  }, 40);
+}
+
+let lastEmittedLeft = null;
+function handleLeftInput(broadcast = true) {
+  if (!diffInputLeft) return;
+  const val = diffInputLeft.value;
+  sessionStorage.setItem('shared_json_left', val);
+  if (broadcast && val !== lastEmittedLeft) {
+    lastEmittedLeft = val;
+    jsonSyncChannel.postMessage({
+      type: 'UPDATE_JSON',
+      senderId: CHANNEL_ID,
+      payload: val
+    });
+  }
+  debouncedExecuteDiff();
+}
+
+if (diffInputLeft) {
+  diffInputLeft.addEventListener('input', () => handleLeftInput(true));
+}
+if (diffInputRight) {
+  diffInputRight.addEventListener('input', debouncedExecuteDiff);
+}
 
 jsonSyncChannel.onmessage = (e) => {
-  if (e.data?.type === 'UPDATE_JSON' && e.data.payload !== diffInputLeft.value) {
+  if (e.data?.type === 'UPDATE_JSON' && e.data.senderId !== CHANNEL_ID && e.data.payload !== diffInputLeft.value) {
     diffInputLeft.value = e.data.payload;
-    handleLeftInput(false);
+    lastEmittedLeft = e.data.payload;
+    sessionStorage.setItem('shared_json_left', e.data.payload);
+    executeLineByLineDiff();
   }
 };
 
-// Recursive alphabetical JSON key sorting
 function sortObjectKeysRecursively(obj) {
   if (obj === null || typeof obj !== 'object') {
     return obj;
@@ -166,7 +223,7 @@ function sortObjectKeysRecursively(obj) {
 }
 
 function sortJsonText(text) {
-  if (!text.trim()) return text;
+  if (!text || !text.trim()) return text;
   const parsed = JSON.parse(text);
   const sorted = sortObjectKeysRecursively(parsed);
   return JSON.stringify(sorted, null, 2);
@@ -188,8 +245,21 @@ function tokenize(str) {
 function computeInlineTokens(tokensA, tokensB) {
   const n = tokensA.length;
   const m = tokensB.length;
-  const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
+  if (n === 0 || m === 0) {
+    return {
+      diffA: new Set(tokensA.map((_, i) => i)),
+      diffB: new Set(tokensB.map((_, i) => i))
+    };
+  }
 
+  if (n * m > 250000) {
+    return {
+      diffA: new Set(tokensA.map((_, i) => i)),
+      diffB: new Set(tokensB.map((_, i) => i))
+    };
+  }
+
+  const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
   for (let i = 1; i <= n; i++) {
     for (let j = 1; j <= m; j++) {
       if (tokensA[i - 1] === tokensB[j - 1]) {
@@ -222,6 +292,20 @@ function computeInlineTokens(tokensA, tokensB) {
 function computeLineDiff(linesA, linesB) {
   const N = linesA.length;
   const M = linesB.length;
+
+  const diffA = new Map();
+  const diffB = new Map();
+
+  if (N === 0 && M === 0) {
+    return { diffA, diffB, pairedModsA: new Map(), pairedModsB: new Map() };
+  }
+
+  if (N * M > 2000000) {
+    linesA.forEach((_, idx) => diffA.set(idx, 'DEL'));
+    linesB.forEach((_, idx) => diffB.set(idx, 'ADD'));
+    return { diffA, diffB, pairedModsA: new Map(), pairedModsB: new Map() };
+  }
+
   const dp = Array.from({ length: N + 1 }, () => new Int32Array(M + 1));
 
   for (let i = 1; i <= N; i++) {
@@ -235,54 +319,61 @@ function computeLineDiff(linesA, linesB) {
   }
 
   let i = N, j = M;
-  const diffA = new Map();
-  const diffB = new Map();
+  const rawDiffA = [];
+  const rawDiffB = [];
 
   while (i > 0 || j > 0) {
     if (i > 0 && j > 0 && linesA[i - 1].trim() === linesB[j - 1].trim()) {
       i--; j--;
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      diffB.set(j - 1, 'ADD');
-      j--;
-    } else if (i > 0 && (j === 0 || dp[i][j - 1] < dp[i - 1][j])) {
-      diffA.set(i - 1, 'DEL');
+    } else if (i > 0 && (j === 0 || dp[i - 1][j] >= dp[i][j - 1])) {
+      rawDiffA.push(i - 1);
       i--;
+    } else if (j > 0 && (i === 0 || dp[i - 1][j] < dp[i][j - 1])) {
+      rawDiffB.push(j - 1);
+      j--;
     }
   }
+
+  rawDiffA.reverse().forEach((idx) => diffA.set(idx, 'DEL'));
+  rawDiffB.reverse().forEach((idx) => diffB.set(idx, 'ADD'));
 
   const pairedModsA = new Map();
   const pairedModsB = new Map();
   const matchedRightIndices = new Set();
 
   diffA.forEach((typeA, idxA) => {
-    const lineA = linesA[idxA].trim();
-    const matchA = lineA.match(/"([^"]+)"\s*:/);
-    if (matchA) {
-      const keyA = matchA[1];
-      let bestBIdx = -1;
-      let minDistance = Infinity;
+    const rawLineA = linesA[idxA];
+    const matchA = rawLineA.match(/^(\s*)"?([^":]+)"?\s*:/);
+    if (!matchA) return;
 
-      for (const [idxB] of diffB.entries()) {
-        if (!matchedRightIndices.has(idxB)) {
-          const lineB = linesB[idxB].trim();
-          const matchB = lineB.match(/"([^"]+)"\s*:/);
-          if (matchB && matchB[1] === keyA) {
-            const distance = Math.abs(idxA - idxB);
-            if (distance < minDistance) {
-              minDistance = distance;
-              bestBIdx = idxB;
-            }
+    const indentA = matchA[1].length;
+    const keyA = matchA[2];
+    let bestBIdx = -1;
+    let minDistance = Infinity;
+
+    for (const [idxB] of diffB.entries()) {
+      if (!matchedRightIndices.has(idxB)) {
+        const rawLineB = linesB[idxB];
+        const matchB = rawLineB.match(/^(\s*)"?([^":]+)"?\s*:/);
+        if (matchB) {
+          const indentB = matchB[1].length;
+          const keyB = matchB[2];
+          const distance = Math.abs(idxA - idxB);
+
+          if (keyA === keyB && indentA === indentB && distance < 35 && distance < minDistance) {
+            minDistance = distance;
+            bestBIdx = idxB;
           }
         }
       }
+    }
 
-      if (bestBIdx !== -1) {
-        diffA.set(idxA, 'MOD');
-        diffB.set(bestBIdx, 'MOD');
-        pairedModsA.set(idxA, bestBIdx);
-        pairedModsB.set(bestBIdx, idxA);
-        matchedRightIndices.add(bestBIdx);
-      }
+    if (bestBIdx !== -1) {
+      diffA.set(idxA, 'MOD');
+      diffB.set(bestBIdx, 'MOD');
+      pairedModsA.set(idxA, bestBIdx);
+      pairedModsB.set(bestBIdx, idxA);
+      matchedRightIndices.add(bestBIdx);
     }
   });
 
@@ -301,15 +392,20 @@ function renderTokens(tokens, changeSet, highlightClass) {
 
 function renderHighlightedTokens(lineText, type, pairedLineText, isFilterActive, isLeft) {
   if (!isFilterActive || !type) {
-    return escapeHtml(lineText);
+    return escapeHtml(lineText) || '&nbsp;';
   }
 
   if (!pairedLineText) {
     const highlightClass = type === 'DEL' ? 'diff-token-del' : 'diff-token-add';
-    const leading = lineText.match(/^\s*/)[0];
-    const trailing = lineText.match(/\s*$/)[0];
+    const matchLeading = lineText.match(/^\s*/);
+    const leading = matchLeading ? matchLeading[0] : '';
+    const matchTrailing = lineText.match(/\s*$/);
+    const trailing = matchTrailing ? matchTrailing[0] : '';
     const core = lineText.slice(leading.length, lineText.length - trailing.length);
-    if (!core) return escapeHtml(lineText);
+
+    if (!core) {
+      return `<mark class="${highlightClass}">${escapeHtml(lineText) || '&nbsp;'}</mark>`;
+    }
     return `${escapeHtml(leading)}<mark class="${highlightClass}">${escapeHtml(core)}</mark>${escapeHtml(trailing)}`;
   }
 
@@ -317,12 +413,17 @@ function renderHighlightedTokens(lineText, type, pairedLineText, isFilterActive,
   const tokensOther = tokenize(pairedLineText);
   const { diffA, diffB } = computeInlineTokens(tokensThis, tokensOther);
   const activeChangeSet = isLeft ? diffA : diffB;
-  return renderTokens(tokensThis, activeChangeSet, 'diff-token-mod');
+  return renderTokens(tokensThis, activeChangeSet, 'diff-token-mod') || '&nbsp;';
+}
+
+function normalizeInput(str) {
+  return (str || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
 
 function executeLineByLineDiff() {
-  const rawA = diffInputLeft.value;
-  const rawB = diffInputRight.value;
+  if (!diffInputLeft || !diffInputRight) return;
+  const rawA = normalizeInput(diffInputLeft.value);
+  const rawB = normalizeInput(diffInputRight.value);
 
   const linesA = rawA.length > 0 ? rawA.split('\n') : [];
   const linesB = rawB.length > 0 ? rawB.split('\n') : [];
@@ -350,7 +451,9 @@ function executeLineByLineDiff() {
     const content = renderHighlightedTokens(linesA[i], type, pairedText, isFilterActive, true);
     backdropHtmlA += `<div class="backdrop-line">${content || '&nbsp;'}</div>`;
   }
-  diffBackdropLeft.innerHTML = `<div class="backdrop-content">${backdropHtmlA}</div>`;
+  if (diffBackdropLeft) {
+    diffBackdropLeft.innerHTML = `<div class="backdrop-content">${backdropHtmlA}</div>`;
+  }
 
   // 2. Render Right Backdrops
   let backdropHtmlB = '';
@@ -370,11 +473,15 @@ function executeLineByLineDiff() {
     const content = renderHighlightedTokens(linesB[j], type, pairedText, isFilterActive, false);
     backdropHtmlB += `<div class="backdrop-line">${content || '&nbsp;'}</div>`;
   }
-  diffBackdropRight.innerHTML = `<div class="backdrop-content">${backdropHtmlB}</div>`;
+  if (diffBackdropRight) {
+    diffBackdropRight.innerHTML = `<div class="backdrop-content">${backdropHtmlB}</div>`;
+  }
 
-  // 3. Measure Rendered Heights
+  // 3. Layout, Measurements, and Delta Binding
   requestAnimationFrame(() => {
-    const backdropContentA = diffBackdropLeft.firstElementChild;
+    syncBackdropWidths();
+
+    const backdropContentA = diffBackdropLeft?.firstElementChild;
     const renderedLinesA = backdropContentA ? backdropContentA.children : [];
     let gutterHtmlA = '';
     for (let i = 0; i < linesA.length; i++) {
@@ -385,12 +492,15 @@ function executeLineByLineDiff() {
       } else if (type === 'MOD' && (activeDiffFilter === 'ALL' || activeDiffFilter === 'MOD')) {
         gutterClass = 'gutter-mod';
       }
-      const h = renderedLinesA[i] ? renderedLinesA[i].getBoundingClientRect().height : 20;
+      const measured = renderedLinesA[i] ? renderedLinesA[i].offsetHeight : 20;
+      const h = Math.max(20, Math.round(measured));
       gutterHtmlA += `<div class="gutter-row ${gutterClass}" style="height:${h}px">${i + 1}</div>`;
     }
-    diffLinesLeft.innerHTML = `<div class="line-numbers-content">${gutterHtmlA}</div>`;
+    if (diffLinesLeft) {
+      diffLinesLeft.innerHTML = `<div class="line-numbers-content">${gutterHtmlA}</div>`;
+    }
 
-    const backdropContentB = diffBackdropRight.firstElementChild;
+    const backdropContentB = diffBackdropRight?.firstElementChild;
     const renderedLinesB = backdropContentB ? backdropContentB.children : [];
     let gutterHtmlB = '';
     for (let j = 0; j < linesB.length; j++) {
@@ -401,20 +511,23 @@ function executeLineByLineDiff() {
       } else if (type === 'MOD' && (activeDiffFilter === 'ALL' || activeDiffFilter === 'MOD')) {
         gutterClass = 'gutter-mod';
       }
-      const h = renderedLinesB[j] ? renderedLinesB[j].getBoundingClientRect().height : 20;
+      const measured = renderedLinesB[j] ? renderedLinesB[j].offsetHeight : 20;
+      const h = Math.max(20, Math.round(measured));
       gutterHtmlB += `<div class="gutter-row ${gutterClass}" style="height:${h}px">${j + 1}</div>`;
     }
-    diffLinesRight.innerHTML = `<div class="line-numbers-content">${gutterHtmlB}</div>`;
+    if (diffLinesRight) {
+      diffLinesRight.innerHTML = `<div class="line-numbers-content">${gutterHtmlB}</div>`;
+    }
 
     updatePositions('left', diffInputLeft.scrollTop);
     updatePositions('right', diffInputRight.scrollTop);
+
+    buildJumpDeltas(diffA, diffB, pairedModsA);
   });
 
-  filterBtnAdd.textContent = `+ ${countAdd} `;
-  filterBtnDel.textContent = `- ${countDel} `;
-  filterBtnMod.textContent = `~ ${countMod} `;
-
-  buildJumpDeltas(diffA, diffB, pairedModsA);
+  if (filterBtnAdd) filterBtnAdd.textContent = `+ ${countAdd} `;
+  if (filterBtnDel) filterBtnDel.textContent = `- ${countDel} `;
+  if (filterBtnMod) filterBtnMod.textContent = `~ ${countMod} `;
 }
 
 function buildJumpDeltas(diffA, diffB, pairedModsA) {
@@ -452,42 +565,41 @@ function buildJumpDeltas(diffA, diffB, pairedModsA) {
     return posA - posB;
   });
 
+  document.querySelectorAll('.jump-target').forEach(el => el.classList.remove('jump-target'));
+
   if (jumpDeltas.length === 0) {
     currentJumpIndex = -1;
-    diffJumpCounter.textContent = '0 / 0';
-    btnJumpPrev.disabled = true;
-    btnJumpNext.disabled = true;
+    if (diffJumpCounter) diffJumpCounter.textContent = '0 / 0';
+    if (btnJumpPrev) btnJumpPrev.disabled = true;
+    if (btnJumpNext) btnJumpNext.disabled = true;
   } else {
-    if (currentJumpIndex >= jumpDeltas.length) {
-      currentJumpIndex = jumpDeltas.length - 1;
-    } else if (currentJumpIndex === -1) {
+    if (currentJumpIndex >= jumpDeltas.length || currentJumpIndex < 0) {
       currentJumpIndex = 0;
     }
-    diffJumpCounter.textContent = `${currentJumpIndex + 1} / ${jumpDeltas.length}`;
-    btnJumpPrev.disabled = false;
-    btnJumpNext.disabled = false;
+    if (diffJumpCounter) diffJumpCounter.textContent = `${currentJumpIndex + 1} / ${jumpDeltas.length}`;
+    if (btnJumpPrev) btnJumpPrev.disabled = false;
+    if (btnJumpNext) btnJumpNext.disabled = false;
   }
 }
 
 function jumpToDelta(index) {
   if (index < 0 || index >= jumpDeltas.length) return;
   currentJumpIndex = index;
-  diffJumpCounter.textContent = `${currentJumpIndex + 1} / ${jumpDeltas.length}`;
+  if (diffJumpCounter) diffJumpCounter.textContent = `${currentJumpIndex + 1} / ${jumpDeltas.length}`;
 
   const delta = jumpDeltas[index];
-
   document.querySelectorAll('.jump-target').forEach(el => el.classList.remove('jump-target'));
 
   let targetScrollY = 0;
 
-  const contentA = diffBackdropLeft.firstElementChild;
+  const contentA = diffBackdropLeft?.firstElementChild;
   const linesA = contentA ? contentA.children : [];
-  const gutterContentA = diffLinesLeft.firstElementChild;
+  const gutterContentA = diffLinesLeft?.firstElementChild;
   const guttersA = gutterContentA ? gutterContentA.children : [];
 
-  const contentB = diffBackdropRight.firstElementChild;
+  const contentB = diffBackdropRight?.firstElementChild;
   const linesB = contentB ? contentB.children : [];
-  const gutterContentB = diffLinesRight.firstElementChild;
+  const gutterContentB = diffLinesRight?.firstElementChild;
   const guttersB = gutterContentB ? gutterContentB.children : [];
 
   if (delta.lineA !== null && linesA[delta.lineA]) {
@@ -496,78 +608,98 @@ function jumpToDelta(index) {
     const containerBoxA = diffInputLeft.getBoundingClientRect();
     targetScrollY = (boxA.top - containerBoxA.top + diffInputLeft.scrollTop) - (diffInputLeft.clientHeight / 2) + (boxA.height / 2);
 
-    if (guttersA[delta.lineA]) guttersA[delta.lineA].classList.add('jump-target');
+    if (guttersA && guttersA[delta.lineA]) guttersA[delta.lineA].classList.add('jump-target');
   } else if (delta.lineB !== null && linesB[delta.lineB]) {
     const nodeB = linesB[delta.lineB];
     const boxB = nodeB.getBoundingClientRect();
     const containerBoxB = diffInputRight.getBoundingClientRect();
     targetScrollY = (boxB.top - containerBoxB.top + diffInputRight.scrollTop) - (diffInputRight.clientHeight / 2) + (boxB.height / 2);
 
-    if (guttersB[delta.lineB]) guttersB[delta.lineB].classList.add('jump-target');
+    if (guttersB && guttersB[delta.lineB]) guttersB[delta.lineB].classList.add('jump-target');
   }
 
   if (delta.lineA !== null && delta.lineB !== null) {
-    if (guttersB[delta.lineB]) guttersB[delta.lineB].classList.add('jump-target');
+    if (guttersB && guttersB[delta.lineB]) guttersB[delta.lineB].classList.add('jump-target');
   }
 
-  targetScrollY = Math.max(0, targetScrollY);
+  const maxScrollA = diffInputLeft ? diffInputLeft.scrollHeight - diffInputLeft.clientHeight : 0;
+  const maxScrollB = diffInputRight ? diffInputRight.scrollHeight - diffInputRight.clientHeight : 0;
+  const maxScroll = Math.max(0, Math.max(maxScrollA, maxScrollB));
+  targetScrollY = Math.max(0, Math.min(targetScrollY, maxScroll));
 
   isProgrammaticScrolling = true;
   clearTimeout(scrollLockTimeout);
 
-  diffInputLeft.scrollTo({ top: targetScrollY, behavior: 'smooth' });
-  diffInputRight.scrollTo({ top: targetScrollY, behavior: 'smooth' });
-  updatePositions('left', targetScrollY);
-  updatePositions('right', targetScrollY);
+  if (diffInputLeft) diffInputLeft.scrollTo({ top: targetScrollY, behavior: 'smooth' });
+  if (diffInputRight) diffInputRight.scrollTo({ top: targetScrollY, behavior: 'smooth' });
 
-  scrollLockTimeout = setTimeout(() => {
-    isProgrammaticScrolling = false;
-  }, 400);
+  const startTime = performance.now();
+  function syncAnimation() {
+    if (!isProgrammaticScrolling) return;
+    updatePositions('left', diffInputLeft.scrollTop);
+    updatePositions('right', diffInputRight.scrollTop);
+    if (performance.now() - startTime < 450) {
+      requestAnimationFrame(syncAnimation);
+    } else {
+      isProgrammaticScrolling = false;
+      updatePositions('left', diffInputLeft.scrollTop);
+      updatePositions('right', diffInputRight.scrollTop);
+    }
+  }
+  requestAnimationFrame(syncAnimation);
 }
 
-btnJumpPrev.addEventListener('click', () => {
-  if (jumpDeltas.length === 0) return;
-  const prevIdx = currentJumpIndex > 0 ? currentJumpIndex - 1 : jumpDeltas.length - 1;
-  jumpToDelta(prevIdx);
-});
+if (btnJumpPrev) {
+  btnJumpPrev.addEventListener('click', () => {
+    if (jumpDeltas.length === 0) return;
+    const prevIdx = currentJumpIndex > 0 ? currentJumpIndex - 1 : jumpDeltas.length - 1;
+    jumpToDelta(prevIdx);
+  });
+}
 
-btnJumpNext.addEventListener('click', () => {
-  if (jumpDeltas.length === 0) return;
-  const nextIdx = currentJumpIndex < jumpDeltas.length - 1 ? currentJumpIndex + 1 : 0;
-  jumpToDelta(nextIdx);
-});
+if (btnJumpNext) {
+  btnJumpNext.addEventListener('click', () => {
+    if (jumpDeltas.length === 0) return;
+    const nextIdx = currentJumpIndex < jumpDeltas.length - 1 ? currentJumpIndex + 1 : 0;
+    jumpToDelta(nextIdx);
+  });
+}
 
 window.addEventListener('keydown', (e) => {
   if (e.key === 'F7') {
     e.preventDefault();
     if (e.shiftKey) {
-      btnJumpPrev.click();
+      btnJumpPrev?.click();
     } else {
-      btnJumpNext.click();
+      btnJumpNext?.click();
     }
   }
 });
 
 function setDiffFilter(filterType) {
   activeDiffFilter = filterType;
-  filterBtnAll.classList.toggle('active', filterType === 'ALL');
-  filterBtnAdd.classList.toggle('active', filterType === 'ADD');
-  filterBtnDel.classList.toggle('active', filterType === 'DEL');
-  filterBtnMod.classList.toggle('active', filterType === 'MOD');
+  if (filterBtnAll) filterBtnAll.classList.toggle('active', filterType === 'ALL');
+  if (filterBtnAdd) filterBtnAdd.classList.toggle('active', filterType === 'ADD');
+  if (filterBtnDel) filterBtnDel.classList.toggle('active', filterType === 'DEL');
+  if (filterBtnMod) filterBtnMod.classList.toggle('active', filterType === 'MOD');
   executeLineByLineDiff();
 }
 
-filterBtnAll.addEventListener('click', () => setDiffFilter('ALL'));
-filterBtnAdd.addEventListener('click', () => setDiffFilter('ADD'));
-filterBtnDel.addEventListener('click', () => setDiffFilter('DEL'));
-filterBtnMod.addEventListener('click', () => setDiffFilter('MOD'));
+if (filterBtnAll) filterBtnAll.addEventListener('click', () => setDiffFilter('ALL'));
+if (filterBtnAdd) filterBtnAdd.addEventListener('click', () => setDiffFilter('ADD'));
+if (filterBtnDel) filterBtnDel.addEventListener('click', () => setDiffFilter('DEL'));
+if (filterBtnMod) filterBtnMod.addEventListener('click', () => setDiffFilter('MOD'));
 
-document.getElementById('btn-diff-swap').addEventListener('click', () => {
-  const temp = diffInputLeft.value;
-  diffInputLeft.value = diffInputRight.value;
-  diffInputRight.value = temp;
-  handleLeftInput(true);
-});
+if (btnDiffSwap) {
+  btnDiffSwap.addEventListener('click', () => {
+    const temp = diffInputLeft.value;
+    diffInputLeft.value = diffInputRight.value;
+    diffInputRight.value = temp;
+    sessionStorage.setItem('shared_json_left', diffInputLeft.value);
+    clearTimeout(debounceDiffTimer);
+    executeLineByLineDiff();
+  });
+}
 
 function showButtonFeedback(btn, isSuccess) {
   if (!btn) return;
@@ -579,17 +711,19 @@ function showButtonFeedback(btn, isSuccess) {
   setTimeout(() => { iconContainer.innerHTML = originalSvg; }, 1400);
 }
 
-// Semantic Key Sorting Handler
 if (btnSortKeys) {
   btnSortKeys.addEventListener('click', () => {
     let successA = true, successB = true;
+    const hasA = Boolean(diffInputLeft.value.trim());
+    const hasB = Boolean(diffInputRight.value.trim());
 
-    if (diffInputLeft.value.trim()) {
+    if (hasA) {
       try {
         diffInputLeft.value = sortJsonText(diffInputLeft.value);
         sessionStorage.setItem('shared_json_left', diffInputLeft.value);
         jsonSyncChannel.postMessage({
           type: 'UPDATE_JSON',
+          senderId: CHANNEL_ID,
           payload: diffInputLeft.value
         });
       } catch {
@@ -597,7 +731,7 @@ if (btnSortKeys) {
       }
     }
 
-    if (diffInputRight.value.trim()) {
+    if (hasB) {
       try {
         diffInputRight.value = sortJsonText(diffInputRight.value);
       } catch {
@@ -605,27 +739,32 @@ if (btnSortKeys) {
       }
     }
 
-    const overallSuccess = successA && successB && (diffInputLeft.value.trim() || diffInputRight.value.trim());
+    const overallSuccess = (hasA || hasB) && (hasA ? successA : true) && (hasB ? successB : true);
     showButtonFeedback(btnSortKeys, overallSuccess);
     executeLineByLineDiff();
   });
 }
 
 const btnFormatLeft = document.getElementById('btn-diff-format-left');
-btnFormatLeft.addEventListener('click', () => {
-  const raw = diffInputLeft.value;
-  if (!raw.trim()) return;
+if (btnFormatLeft) {
+  btnFormatLeft.addEventListener('click', () => {
+    const raw = diffInputLeft.value;
+    if (!raw.trim()) return;
 
-  if (typeof analyzeJSONDiagnostics === 'function') {
-    const diag = analyzeJSONDiagnostics(raw);
-    if (diag && diag.success) {
-      diffInputLeft.value = JSON.stringify(diag.data, null, 2);
-      handleLeftInput(true);
-      showButtonFeedback(btnFormatLeft, true);
-    } else {
-      showButtonFeedback(btnFormatLeft, false);
+    if (typeof analyzeJSONDiagnostics === 'function') {
+      try {
+        const diag = analyzeJSONDiagnostics(raw);
+        if (diag && diag.success) {
+          diffInputLeft.value = JSON.stringify(diag.data, null, 2);
+          handleLeftInput(true);
+          showButtonFeedback(btnFormatLeft, true);
+          return;
+        }
+      } catch {
+        // Fallback to native parsing
+      }
     }
-  } else {
+
     try {
       diffInputLeft.value = JSON.stringify(JSON.parse(raw), null, 2);
       handleLeftInput(true);
@@ -633,24 +772,29 @@ btnFormatLeft.addEventListener('click', () => {
     } catch {
       showButtonFeedback(btnFormatLeft, false);
     }
-  }
-});
+  });
+}
 
 const btnFormatRight = document.getElementById('btn-diff-format-right');
-btnFormatRight.addEventListener('click', () => {
-  const raw = diffInputRight.value;
-  if (!raw.trim()) return;
+if (btnFormatRight) {
+  btnFormatRight.addEventListener('click', () => {
+    const raw = diffInputRight.value;
+    if (!raw.trim()) return;
 
-  if (typeof analyzeJSONDiagnostics === 'function') {
-    const diag = analyzeJSONDiagnostics(raw);
-    if (diag && diag.success) {
-      diffInputRight.value = JSON.stringify(diag.data, null, 2);
-      executeLineByLineDiff();
-      showButtonFeedback(btnFormatRight, true);
-    } else {
-      showButtonFeedback(btnFormatRight, false);
+    if (typeof analyzeJSONDiagnostics === 'function') {
+      try {
+        const diag = analyzeJSONDiagnostics(raw);
+        if (diag && diag.success) {
+          diffInputRight.value = JSON.stringify(diag.data, null, 2);
+          executeLineByLineDiff();
+          showButtonFeedback(btnFormatRight, true);
+          return;
+        }
+      } catch {
+        // Fallback to native parsing
+      }
     }
-  } else {
+
     try {
       diffInputRight.value = JSON.stringify(JSON.parse(raw), null, 2);
       executeLineByLineDiff();
@@ -658,10 +802,9 @@ btnFormatRight.addEventListener('click', () => {
     } catch {
       showButtonFeedback(btnFormatRight, false);
     }
-  }
-});
+  });
+}
 
-// Centralized Clear Both Panes
 if (btnClearAll) {
   btnClearAll.addEventListener('click', () => {
     diffInputLeft.value = '';
@@ -671,6 +814,7 @@ if (btnClearAll) {
 
     jsonSyncChannel.postMessage({
       type: 'UPDATE_JSON',
+      senderId: CHANNEL_ID,
       payload: ''
     });
 
@@ -689,12 +833,22 @@ if (btnClearAll) {
 }
 
 window.addEventListener('resize', () => {
+  syncBackdropWidths();
   executeLineByLineDiff();
 });
 
-// Clean initialization
-diffInputLeft.value = '';
-diffInputRight.value = '';
+// Clear input on explicit page refresh, but retain if navigated from Viewer
+const isReload = (performance.getEntriesByType("navigation")[0]?.type === 'reload');
+if (isReload) {
+  sessionStorage.removeItem('shared_json_left');
+  if (diffInputLeft) diffInputLeft.value = '';
+  if (diffInputRight) diffInputRight.value = '';
+} else {
+  const savedLeft = sessionStorage.getItem('shared_json_left');
+  if (savedLeft && diffInputLeft) {
+    diffInputLeft.value = savedLeft;
+  }
+}
 executeLineByLineDiff();
 
 window.addEventListener('beforeunload', () => {
