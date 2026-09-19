@@ -166,21 +166,17 @@
     .main-view {
       flex: 1;
       min-height: 0;
-      padding: 12px 14px;
       overflow: hidden;
     }
 
     .app-container {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 14px;
       height: 100%;
     }
 
     .pane {
       background: var(--panel-bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -235,65 +231,74 @@
     }
 
     .line-numbers {
-      width: 48px;
-      padding: 14px 6px 14px 0;
-      text-align: right;
+      width: 52px;
+      padding: 14px 0;
       background: var(--gutter-bg);
       color: var(--text-muted);
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 13px;
-      line-height: 1.5;
+      line-height: 20px;
       user-select: none;
       border-right: 1px solid var(--border);
       overflow: hidden;
       z-index: 3;
+      flex-shrink: 0;
     }
+
     .line-numbers div {
-      height: 19.5px;
-      padding-right: 6px;
+      min-height: 19.5px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-end;
+      padding: 0 8px 0 6px;
       position: relative;
+      box-sizing: border-box;
+      line-height: 19.5px;
     }
 
     .line-numbers div.gutter-add {
-      background: rgba(34, 197, 94, 0.25);
       color: #4ade80;
       font-weight: 700;
     }
-    .line-numbers div.gutter-add::after {
+    .line-numbers div.gutter-add::before {
       content: "+";
       position: absolute;
-      right: 2px;
+      left: 6px;
       top: 0;
-      font-weight: bold;
-      color: #4ade80;
+      font-weight: 700;
+      color: #000;
+      background-color: #4ade88;
+      line-height: 19.5px;
     }
 
     .line-numbers div.gutter-del {
-      background: rgba(239, 68, 68, 0.25);
       color: #f87171;
       font-weight: 700;
     }
-    .line-numbers div.gutter-del::after {
+    .line-numbers div.gutter-del::before {
       content: "-";
       position: absolute;
-      right: 2px;
+      left: 6px;
       top: 0;
-      font-weight: bold;
-      color: #f87171;
+      font-weight: 700;
+      color: #000;
+      background-color: #f87178;
+      line-height: 19.5px;
     }
 
     .line-numbers div.gutter-mod {
-      background: rgba(234, 179, 8, 0.25);
       color: #facc15;
       font-weight: 700;
     }
-    .line-numbers div.gutter-mod::after {
+    .line-numbers div.gutter-mod::before {
       content: "~";
       position: absolute;
-      right: 2px;
+      left: 6px;
       top: 0;
-      font-weight: bold;
-      color: #facc15;
+      font-weight: 700;
+      color: #000;
+      background-color: #facc15;
+      line-height: 19.5px;
     }
 
     .textarea-container {
@@ -305,12 +310,13 @@
     .backdrop-layer, textarea {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 13px;
-      line-height: 1.5;
+      line-height: 20px;
       padding: 14px;
       margin: 0;
       border: 0;
       box-sizing: border-box;
-      white-space: pre;
+      white-space: pre-wrap;
+      word-break: break-all;
       letter-spacing: 0;
       tab-size: 2;
     }
@@ -322,6 +328,7 @@
       pointer-events: none;
       z-index: 1;
       background: transparent;
+      color: transparent;
     }
 
     textarea {
@@ -331,27 +338,36 @@
       color: var(--text);
       resize: none;
       outline: none;
-      overflow-wrap: normal;
-      overflow-x: auto;
+      overflow-y: auto;
+      overflow-x: hidden;
       z-index: 2;
     }
 
-    .diff-line-bg {
-      height: 19.5px;
-      display: block;
-      width: 100%;
+    /* Sub-string / Token Highlights */
+    .diff-token-del {
+      background-color: rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+      border-radius: 3px;
     }
-    .diff-line-bg.line-added {
-      background-color: var(--diff-add-bg);
-      border-left: 3px solid var(--diff-add-gutter);
+
+    .diff-token-add {
+      background-color: rgba(34, 197, 94, 0.4);
+      color: #86efac;
+      border-radius: 3px;
     }
-    .diff-line-bg.line-deleted {
-      background-color: var(--diff-del-bg);
-      border-left: 3px solid var(--diff-del-gutter);
+
+    .diff-token-mod {
+      background-color: rgba(234, 179, 8, 0.4);
+      color: #fde047;
+      border-radius: 3px;
     }
-    .diff-line-bg.line-modified {
-      background-color: var(--diff-mod-bg);
-      border-left: 3px solid var(--diff-mod-gutter);
+
+    #diff-measure-mirror {
+      position: absolute;
+      visibility: hidden;
+      top: -9999px;
+      left: -9999px;
+      pointer-events: none;
     }
 
     button.sync-scroll-btn {
@@ -510,3 +526,4 @@
   color: #f87171;
   border-color: rgba(239, 68, 68, 0.4);
 }
+

@@ -18,7 +18,7 @@ const gutter = document.getElementById('gutter');
 const gutterContent = document.getElementById('gutter-content');
 const viewport = document.getElementById('viewport');
 const themeToggleBtn = document.getElementById('theme-toggle-btn');
-const activeFilenameEl = document.getElementById('active-filename');
+// const activeFilenameEl = document.getElementById('active-filename');
 const fileInput = document.getElementById('file-input');
 const dropOverlay = document.getElementById('drop-overlay');
 
@@ -103,7 +103,6 @@ if (!document.getElementById('caret-blink-style')) {
 function applyTheme(isDark) {
   document.body.classList.toggle('dark-theme', isDark);
   document.getElementById('theme-icon').textContent = isDark ? '☀️' : '🌙';
-  document.getElementById('theme-label').textContent = isDark ? 'Grey Theme' : 'Dark Theme';
   localStorage.setItem('json_theme', isDark ? 'dark' : 'grey');
 }
 themeToggleBtn.addEventListener('click', () => {
@@ -119,15 +118,11 @@ function normalizeNewlines(str) {
   return str.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
 
-function setEditorValue(newVal, newFilename = null) {
+function setEditorValue(newVal) {
   const cleanVal = normalizeNewlines(newVal).replace(/\u00A0/g, ' ');
   textarea.focus();
   textarea.setSelectionRange(0, textarea.value.length);
   textarea.setRangeText(cleanVal, 0, textarea.value.length, 'end');
-  if (newFilename) {
-    activeFilename = newFilename;
-    activeFilenameEl.textContent = `(${newFilename})`;
-  }
   textarea.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
@@ -818,6 +813,7 @@ function countKeysIterative(root) {
 }
 
 function validate() {
+  const previousErrorLine = errorLine;
   const diag = analyzeJSONDiagnostics(textarea.value);
   currentDiagnostic = diag;
 
@@ -859,10 +855,24 @@ function validate() {
       }
     }
   }
+
+  // If the error state changed, update the gutter error markers immediately
+  if (previousErrorLine !== errorLine) {
+    const gutterRows = gutterContent.querySelectorAll('.gutter-row');
+    gutterRows.forEach(row => {
+      const line = parseInt(row.getAttribute('data-line'), 10);
+      row.classList.toggle('error-line', errorLine !== null && line === errorLine);
+    });
+  }
 }
 
 function scheduleValidation() {
   clearTimeout(validationDebounceTimer);
+  // Instant validation when document is empty to immediately clear red markers
+  if (!textarea.value.trim()) {
+    validate();
+    return;
+  }
   validationDebounceTimer = setTimeout(() => {
     validate();
   }, 220);
@@ -1738,7 +1748,8 @@ document.getElementById('btn-minify').addEventListener('click', () => {
 });
 
 document.getElementById('btn-clear').addEventListener('click', () => {
-  setEditorValue('', 'untitled.json');
+  errorLine = null;
+  setEditorValue('');
   foldedBlocks.clear();
   closeSearch();
   validate();
