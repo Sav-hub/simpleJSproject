@@ -25,9 +25,6 @@
         </div>
       </div>
 
-      <!-- Diff Jump Navigation -->
-      
-
       <a href="index.html" class="tab-link" id="nav-to-viewer">🛠 Viewer & Tree</a>
       <a href="diff.html" class="tab-link active">⚖️ In-Line Diff Compare</a>
       
@@ -55,11 +52,21 @@
       <div class="control-segment center-segment">
         <button class="sync-scroll-btn active" id="btn-sync-scroll" title="Synchronize scrolling between both editors">
           <span class="status-dot"></span>
-          <span id="sync-scroll-label">Sync Scroll: ON</span>
+          <span id="sync-scroll-label">Sync Scroll</span>
         </button>
 
         <button id="btn-diff-swap" class="icon-btn" title="Swap Original and Modified">⇄</button>
 
+        <!-- Semantic Sort Keys Button -->
+        <button id="btn-diff-sort-keys" class="icon-btn" title="Recursively sort JSON keys alphabetically in both panes">
+          <span class="btn-icon">
+            <svg viewBox="0 0 24 24">
+              <path d="M3 6h18M6 12h12M9 18h6"/>
+            </svg>
+          </span>
+          <span class="btn-text">Sort Keys</span>
+        </button>
+        <!-- Diff Jump Navigation -->
         <div class="diff-nav-group" title="Navigate between diffs">
           <button id="btn-jump-prev" class="icon-btn" title="Previous difference (Shift + F7)" disabled>
             <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
@@ -96,7 +103,7 @@
       </div>
     </div>
 
-    <!-- Dual Editor Panes Without Individual Sub-Headers -->
+    <!-- Dual Editor Panes -->
     <div class="app-container">
       <div class="pane">
         <div class="editor-wrapper">

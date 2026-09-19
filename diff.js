@@ -42,7 +42,6 @@ const diffBackdropRight = document.getElementById('diff-backdrop-right');
 const navToViewer = document.getElementById('nav-to-viewer');
 
 const btnSyncScroll = document.getElementById('btn-sync-scroll');
-const syncScrollLabel = document.getElementById('sync-scroll-label');
 
 const filterBtnAll = document.getElementById('filter-btn-all');
 const filterBtnAdd = document.getElementById('filter-btn-add');
@@ -53,6 +52,7 @@ const btnJumpPrev = document.getElementById('btn-jump-prev');
 const btnJumpNext = document.getElementById('btn-jump-next');
 const diffJumpCounter = document.getElementById('diff-jump-counter');
 const btnClearAll = document.getElementById('btn-diff-clear-all');
+const btnSortKeys = document.getElementById('btn-diff-sort-keys');
 
 let syncScrollEnabled = true;
 let isProgrammaticScrolling = false;
@@ -72,7 +72,6 @@ navToViewer.addEventListener('click', () => {
 btnSyncScroll.addEventListener('click', () => {
   syncScrollEnabled = !syncScrollEnabled;
   btnSyncScroll.classList.toggle('active', syncScrollEnabled);
-  syncScrollLabel.textContent = syncScrollEnabled ? 'Sync Scroll: ON' : 'Sync Scroll: OFF';
 });
 
 // Hardware-Accelerated Leader-Follower Sync
@@ -149,6 +148,29 @@ jsonSyncChannel.onmessage = (e) => {
     handleLeftInput(false);
   }
 };
+
+// Recursive alphabetical JSON key sorting
+function sortObjectKeysRecursively(obj) {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(sortObjectKeysRecursively);
+  }
+  const sortedKeys = Object.keys(obj).sort((a, b) => a.localeCompare(b));
+  const sortedObj = {};
+  for (const key of sortedKeys) {
+    sortedObj[key] = sortObjectKeysRecursively(obj[key]);
+  }
+  return sortedObj;
+}
+
+function sortJsonText(text) {
+  if (!text.trim()) return text;
+  const parsed = JSON.parse(text);
+  const sorted = sortObjectKeysRecursively(parsed);
+  return JSON.stringify(sorted, null, 2);
+}
 
 function escapeHtml(str) {
   return str
@@ -228,7 +250,6 @@ function computeLineDiff(linesA, linesB) {
     }
   }
 
-  // Correlate corresponding keys: choose closest matching index
   const pairedModsA = new Map();
   const pairedModsB = new Map();
   const matchedRightIndices = new Set();
@@ -558,6 +579,38 @@ function showButtonFeedback(btn, isSuccess) {
   setTimeout(() => { iconContainer.innerHTML = originalSvg; }, 1400);
 }
 
+// Semantic Key Sorting Handler
+if (btnSortKeys) {
+  btnSortKeys.addEventListener('click', () => {
+    let successA = true, successB = true;
+
+    if (diffInputLeft.value.trim()) {
+      try {
+        diffInputLeft.value = sortJsonText(diffInputLeft.value);
+        sessionStorage.setItem('shared_json_left', diffInputLeft.value);
+        jsonSyncChannel.postMessage({
+          type: 'UPDATE_JSON',
+          payload: diffInputLeft.value
+        });
+      } catch {
+        successA = false;
+      }
+    }
+
+    if (diffInputRight.value.trim()) {
+      try {
+        diffInputRight.value = sortJsonText(diffInputRight.value);
+      } catch {
+        successB = false;
+      }
+    }
+
+    const overallSuccess = successA && successB && (diffInputLeft.value.trim() || diffInputRight.value.trim());
+    showButtonFeedback(btnSortKeys, overallSuccess);
+    executeLineByLineDiff();
+  });
+}
+
 const btnFormatLeft = document.getElementById('btn-diff-format-left');
 btnFormatLeft.addEventListener('click', () => {
   const raw = diffInputLeft.value;
@@ -639,7 +692,7 @@ window.addEventListener('resize', () => {
   executeLineByLineDiff();
 });
 
-// Initialization on clean load
+// Clean initialization
 diffInputLeft.value = '';
 diffInputRight.value = '';
 executeLineByLineDiff();
