@@ -410,7 +410,27 @@ body {
   overflow: hidden;
 }
 
-/* Identical text rendering metrics between textarea and backdrop */
+/* Identical typography and wrap rules */
+.backdrop-content,
+textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 14px;
+  margin: 0;
+  border: 0;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
+  letter-spacing: 0;
+  tab-size: 2;
+  -moz-tab-size: 2;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 .backdrop-layer {
   position: absolute;
   top: 0;
@@ -430,20 +450,7 @@ body {
 .backdrop-content {
   will-change: transform;
   transform: translate3d(0, 0, 0);
-  padding: 14px;
-  margin: 0;
-  border: 0;
-  box-sizing: border-box;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 13px;
-  line-height: 20px;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  word-break: normal;
-  letter-spacing: 0;
-  tab-size: 2;
-  -moz-tab-size: 2;
+  width: 100%;
   color: transparent !important;
   -webkit-text-fill-color: transparent !important;
 }
@@ -452,13 +459,11 @@ body {
   display: block;
   min-height: 20px;
   line-height: 20px;
-  background: transparent !important;
   box-sizing: border-box;
   white-space: pre-wrap;
   word-wrap: break-word;
   overflow-wrap: break-word;
   word-break: normal;
-  letter-spacing: 0;
 }
 
 textarea {
@@ -475,22 +480,6 @@ textarea {
   overflow-x: hidden;
   z-index: 2;
   caret-color: var(--accent);
-  padding: 14px;
-  margin: 0;
-  border: 0;
-  box-sizing: border-box;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 13px;
-  line-height: 20px;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  word-break: normal;
-  letter-spacing: 0;
-  tab-size: 2;
-  -moz-tab-size: 2;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 /* The text inside backdrop is completely transparent to prevent ghost text */

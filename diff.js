@@ -123,11 +123,23 @@ function updatePositions(target, top) {
 // Match backdrop content width to textarea client width
 function syncBackdropWidths() {
   if (!diffInputLeft || !diffInputRight || !diffBackdropLeft || !diffBackdropRight) return;
+
   const contentA = diffBackdropLeft.firstElementChild;
   const contentB = diffBackdropRight.firstElementChild;
 
-  if (contentA) contentA.style.width = `${diffInputLeft.clientWidth}px`;
-  if (contentB) contentB.style.width = `${diffInputRight.clientWidth}px`;
+  // Measure the vertical scrollbar track width
+  const sbWidthLeft = diffInputLeft.offsetWidth - diffInputLeft.clientWidth;
+  const sbWidthRight = diffInputRight.offsetWidth - diffInputRight.clientWidth;
+
+  // Set width to 100% and compensate scrollbar width purely on padding-right
+  if (contentA) {
+    contentA.style.width = '100%';
+    contentA.style.paddingRight = `${14 + sbWidthLeft}px`;
+  }
+  if (contentB) {
+    contentB.style.width = '100%';
+    contentB.style.paddingRight = `${14 + sbWidthRight}px`;
+  }
 }
 
 if (diffInputLeft) {
