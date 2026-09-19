@@ -38,24 +38,67 @@
   </header>
 
   <main class="main-view">
-    <div class="app-container">
-      <!-- Left Pane -->
-      <div class="pane">
-        <div class="header">
-          <span>Original JSON</span>
-          <div class="actions">
-            <button class="sync-scroll-btn active" id="btn-sync-scroll" title="Synchronize scrolling between both editors">
-              <span class="status-dot"></span>
-              <span id="sync-scroll-label">Sync Scroll: ON</span>
-            </button>
-            <button class="icon-btn primary" id="btn-diff-format-left" title="Format Left">
-              <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
-            </button>
-            <button class="icon-btn danger" id="btn-diff-clear-left" title="Clear Left">
-              <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-            </button>
-          </div>
+    <!-- Single Unified Action Toolbar -->
+    <div class="unified-control-bar">
+      <!-- Left Controls (Original) -->
+      <div class="control-segment left-segment">
+        <span class="segment-title">Original JSON</span>
+        <button class="icon-btn primary" id="btn-diff-format-left" title="Format Left JSON">
+          <span class="btn-icon">
+            <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+          </span>
+          <span class="btn-text">Format</span>
+        </button>
+      </div>
+
+      <!-- Center Shared Tools & Filters -->
+      <div class="control-segment center-segment">
+        <button class="sync-scroll-btn active" id="btn-sync-scroll" title="Synchronize scrolling between both editors">
+          <span class="status-dot"></span>
+          <span id="sync-scroll-label">Sync Scroll: ON</span>
+        </button>
+
+        <button id="btn-diff-swap" class="icon-btn" title="Swap Original and Modified">⇄</button>
+
+        <div class="diff-nav-group" title="Navigate between diffs">
+          <button id="btn-jump-prev" class="icon-btn" title="Previous difference (Shift + F7)" disabled>
+            <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+          </button>
+          <span id="diff-jump-counter" class="diff-jump-counter">0 / 0</span>
+          <button id="btn-jump-next" class="icon-btn" title="Next difference (F7)" disabled>
+            <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
         </div>
+        <div class="diff-filters">
+          <button class="filter-btn filter-all active" id="filter-btn-all">All</button>
+          <button class="filter-btn filter-add" id="filter-btn-add">+ 0</button>
+          <button class="filter-btn filter-del" id="filter-btn-del">- 0</button>
+          <button class="filter-btn filter-mod" id="filter-btn-mod">~ 0</button>
+        </div>
+
+        <button class="icon-btn danger" id="btn-diff-clear-all" title="Clear Both Editors">
+          <span class="btn-icon">
+            <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+          </span>
+          <span class="btn-text">Clear All</span>
+        </button>
+      </div>
+
+      <!-- Right Controls (Modified) -->
+      <div class="control-segment right-segment">
+        <button class="icon-btn primary" id="btn-diff-format-right" title="Format Modified JSON">
+          <span class="btn-icon">
+            <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+          </span>
+          <span class="btn-text">Format</span>
+        </button>
+        <span class="segment-title">Modified JSON</span>
+      </div>
+    </div>
+
+    <!-- Dual Editor Panes Without Individual Sub-Headers -->
+    <div class="app-container">
+      <div class="pane">
         <div class="editor-wrapper">
           <div class="line-numbers" id="diff-lines-left"></div>
           <div class="textarea-container">
@@ -65,37 +108,7 @@
         </div>
       </div>
 
-      <!-- Right Pane -->
       <div class="pane">
-        <div class="header">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <span>Modified JSON</span>
-            <div class="diff-nav-group" title="Navigate between diffs">
-        <button id="btn-jump-prev" class="icon-btn" title="Previous difference (Shift + F7)" disabled>
-          <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
-        </button>
-        <span id="diff-jump-counter" class="diff-jump-counter">0 / 0</span>
-        <button id="btn-jump-next" class="icon-btn" title="Next difference (F7)" disabled>
-          <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-      </div>
-            <div class="diff-filters">
-              <button class="filter-btn filter-all active" id="filter-btn-all">All</button>
-              <button class="filter-btn filter-add" id="filter-btn-add">+ 0</button>
-              <button class="filter-btn filter-del" id="filter-btn-del">- 0</button>
-              <button class="filter-btn filter-mod" id="filter-btn-mod">~ 0</button>
-            </div>
-          </div>
-          <div class="actions">
-            <button id="btn-diff-swap">⇄</button>
-            <button class="icon-btn primary" id="btn-diff-format-right" title="Format Right">
-              <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
-            </button>
-            <button class="icon-btn danger" id="btn-diff-clear-right" title="Clear Right">
-              <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-            </button>
-          </div>
-        </div>
         <div class="editor-wrapper">
           <div class="line-numbers" id="diff-lines-right"></div>
           <div class="textarea-container">

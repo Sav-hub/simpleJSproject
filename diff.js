@@ -52,10 +52,9 @@ const filterBtnMod = document.getElementById('filter-btn-mod');
 const btnJumpPrev = document.getElementById('btn-jump-prev');
 const btnJumpNext = document.getElementById('btn-jump-next');
 const diffJumpCounter = document.getElementById('diff-jump-counter');
+const btnClearAll = document.getElementById('btn-diff-clear-all');
 
 let syncScrollEnabled = true;
-let isSyncingLeft = false;
-let isSyncingRight = false;
 let isProgrammaticScrolling = false;
 let scrollLockTimeout = null;
 let activeDiffFilter = 'ALL';
@@ -66,7 +65,7 @@ let currentJumpIndex = -1;
 navToViewer.addEventListener('click', () => {
   const content = diffInputLeft.value.trim();
   if (content.startsWith('{') || content.startsWith('[')) {
-    localStorage.setItem('shared_json_left', diffInputLeft.value);
+    sessionStorage.setItem('shared_json_left', diffInputLeft.value);
   }
 });
 
@@ -76,20 +75,26 @@ btnSyncScroll.addEventListener('click', () => {
   syncScrollLabel.textContent = syncScrollEnabled ? 'Sync Scroll: ON' : 'Sync Scroll: OFF';
 });
 
-// Resilient Bidirectional Sync
+// Hardware-Accelerated Leader-Follower Sync
 let activeScrollSource = null;
 let scrollReleaseTimer = null;
 
 function claimScrollDriver(source) {
   activeScrollSource = source;
   clearTimeout(scrollReleaseTimer);
-  // Release driver after scroll inertia settles (120ms of inactivity)
   scrollReleaseTimer = setTimeout(() => {
     activeScrollSource = null;
   }, 120);
 }
 
-// Track mouse enter, clicks, and physical wheel/trackpad engagement
+function updatePositions(target, top) {
+  const gutter = target === 'left' ? diffLinesLeft.firstElementChild : diffLinesRight.firstElementChild;
+  const backdrop = target === 'left' ? diffBackdropLeft.firstElementChild : diffBackdropRight.firstElementChild;
+
+  if (gutter) gutter.style.transform = `translate3d(0, ${-top}px, 0)`;
+  if (backdrop) backdrop.style.transform = `translate3d(0, ${-top}px, 0)`;
+}
+
 diffInputLeft.addEventListener('wheel', () => claimScrollDriver('left'), { passive: true });
 diffInputLeft.addEventListener('mouseenter', () => claimScrollDriver('left'), { passive: true });
 diffInputLeft.addEventListener('pointerdown', () => claimScrollDriver('left'), { passive: true });
@@ -98,46 +103,34 @@ diffInputRight.addEventListener('wheel', () => claimScrollDriver('right'), { pas
 diffInputRight.addEventListener('mouseenter', () => claimScrollDriver('right'), { passive: true });
 diffInputRight.addEventListener('pointerdown', () => claimScrollDriver('right'), { passive: true });
 
-// Left Pane Scroll Sync
 diffInputLeft.addEventListener('scroll', () => {
   const top = diffInputLeft.scrollTop;
-
-  // 1. Immediately bind local gutter and backdrop synchronously (0ms delay)
-  diffLinesLeft.scrollTop = top;
-  diffBackdropLeft.scrollTop = top;
+  updatePositions('left', top);
 
   if (isProgrammaticScrolling) return;
 
-  // 2. Drive opposite pane if left is driver or unassigned
   if (syncScrollEnabled && (activeScrollSource === 'left' || !activeScrollSource)) {
     claimScrollDriver('left');
     diffInputRight.scrollTop = top;
-    diffLinesRight.scrollTop = top;
-    diffBackdropRight.scrollTop = top;
+    updatePositions('right', top);
   }
 }, { passive: true });
 
-// Right Pane Scroll Sync
 diffInputRight.addEventListener('scroll', () => {
   const top = diffInputRight.scrollTop;
-
-  // 1. Immediately bind local gutter and backdrop synchronously (0ms delay)
-  diffLinesRight.scrollTop = top;
-  diffBackdropRight.scrollTop = top;
+  updatePositions('right', top);
 
   if (isProgrammaticScrolling) return;
 
-  // 2. Drive opposite pane if right is driver or unassigned
   if (syncScrollEnabled && (activeScrollSource === 'right' || !activeScrollSource)) {
     claimScrollDriver('right');
     diffInputLeft.scrollTop = top;
-    diffLinesLeft.scrollTop = top;
-    diffBackdropLeft.scrollTop = top;
+    updatePositions('left', top);
   }
 }, { passive: true });
 
 function handleLeftInput(broadcast = true) {
-  localStorage.setItem('shared_json_left', diffInputLeft.value);
+  sessionStorage.setItem('shared_json_left', diffInputLeft.value);
   if (broadcast) {
     jsonSyncChannel.postMessage({
       type: 'UPDATE_JSON',
@@ -235,7 +228,7 @@ function computeLineDiff(linesA, linesB) {
     }
   }
 
-  // Correlate corresponding keys: choose closest matching index to keep sequence aligned
+  // Correlate corresponding keys: choose closest matching index
   const pairedModsA = new Map();
   const pairedModsB = new Map();
   const matchedRightIndices = new Set();
@@ -336,7 +329,7 @@ function executeLineByLineDiff() {
     const content = renderHighlightedTokens(linesA[i], type, pairedText, isFilterActive, true);
     backdropHtmlA += `<div class="backdrop-line">${content || '&nbsp;'}</div>`;
   }
-  diffBackdropLeft.innerHTML = backdropHtmlA;
+  diffBackdropLeft.innerHTML = `<div class="backdrop-content">${backdropHtmlA}</div>`;
 
   // 2. Render Right Backdrops
   let backdropHtmlB = '';
@@ -356,11 +349,12 @@ function executeLineByLineDiff() {
     const content = renderHighlightedTokens(linesB[j], type, pairedText, isFilterActive, false);
     backdropHtmlB += `<div class="backdrop-line">${content || '&nbsp;'}</div>`;
   }
-  diffBackdropRight.innerHTML = backdropHtmlB;
+  diffBackdropRight.innerHTML = `<div class="backdrop-content">${backdropHtmlB}</div>`;
 
-  // 3. Render Gutters strictly mapped to actual line count & measured heights
+  // 3. Measure Rendered Heights
   requestAnimationFrame(() => {
-    const renderedLinesA = diffBackdropLeft.children;
+    const backdropContentA = diffBackdropLeft.firstElementChild;
+    const renderedLinesA = backdropContentA ? backdropContentA.children : [];
     let gutterHtmlA = '';
     for (let i = 0; i < linesA.length; i++) {
       const type = diffA.get(i);
@@ -371,11 +365,12 @@ function executeLineByLineDiff() {
         gutterClass = 'gutter-mod';
       }
       const h = renderedLinesA[i] ? renderedLinesA[i].getBoundingClientRect().height : 20;
-      gutterHtmlA += `<div class="${gutterClass}" style="height:${h}px">${i + 1}</div>`;
+      gutterHtmlA += `<div class="gutter-row ${gutterClass}" style="height:${h}px">${i + 1}</div>`;
     }
-    diffLinesLeft.innerHTML = gutterHtmlA;
+    diffLinesLeft.innerHTML = `<div class="line-numbers-content">${gutterHtmlA}</div>`;
 
-    const renderedLinesB = diffBackdropRight.children;
+    const backdropContentB = diffBackdropRight.firstElementChild;
+    const renderedLinesB = backdropContentB ? backdropContentB.children : [];
     let gutterHtmlB = '';
     for (let j = 0; j < linesB.length; j++) {
       const type = diffB.get(j);
@@ -386,16 +381,18 @@ function executeLineByLineDiff() {
         gutterClass = 'gutter-mod';
       }
       const h = renderedLinesB[j] ? renderedLinesB[j].getBoundingClientRect().height : 20;
-      gutterHtmlB += `<div class="${gutterClass}" style="height:${h}px">${j + 1}</div>`;
+      gutterHtmlB += `<div class="gutter-row ${gutterClass}" style="height:${h}px">${j + 1}</div>`;
     }
-    diffLinesRight.innerHTML = gutterHtmlB;
+    diffLinesRight.innerHTML = `<div class="line-numbers-content">${gutterHtmlB}</div>`;
+
+    updatePositions('left', diffInputLeft.scrollTop);
+    updatePositions('right', diffInputRight.scrollTop);
   });
 
   filterBtnAdd.textContent = `+ ${countAdd} `;
   filterBtnDel.textContent = `- ${countDel} `;
   filterBtnMod.textContent = `~ ${countMod} `;
 
-  // 4. Update Navigation Deltas
   buildJumpDeltas(diffA, diffB, pairedModsA);
 }
 
@@ -462,41 +459,45 @@ function jumpToDelta(index) {
 
   let targetScrollY = 0;
 
-  if (delta.lineA !== null && diffBackdropLeft.children[delta.lineA]) {
-    const nodeA = diffBackdropLeft.children[delta.lineA];
+  const contentA = diffBackdropLeft.firstElementChild;
+  const linesA = contentA ? contentA.children : [];
+  const gutterContentA = diffLinesLeft.firstElementChild;
+  const guttersA = gutterContentA ? gutterContentA.children : [];
+
+  const contentB = diffBackdropRight.firstElementChild;
+  const linesB = contentB ? contentB.children : [];
+  const gutterContentB = diffLinesRight.firstElementChild;
+  const guttersB = gutterContentB ? gutterContentB.children : [];
+
+  if (delta.lineA !== null && linesA[delta.lineA]) {
+    const nodeA = linesA[delta.lineA];
     const boxA = nodeA.getBoundingClientRect();
     const containerBoxA = diffInputLeft.getBoundingClientRect();
     targetScrollY = (boxA.top - containerBoxA.top + diffInputLeft.scrollTop) - (diffInputLeft.clientHeight / 2) + (boxA.height / 2);
 
-    const gutterA = diffLinesLeft.children[delta.lineA];
-    if (gutterA) gutterA.classList.add('jump-target');
-  } else if (delta.lineB !== null && diffBackdropRight.children[delta.lineB]) {
-    const nodeB = diffBackdropRight.children[delta.lineB];
+    if (guttersA[delta.lineA]) guttersA[delta.lineA].classList.add('jump-target');
+  } else if (delta.lineB !== null && linesB[delta.lineB]) {
+    const nodeB = linesB[delta.lineB];
     const boxB = nodeB.getBoundingClientRect();
     const containerBoxB = diffInputRight.getBoundingClientRect();
     targetScrollY = (boxB.top - containerBoxB.top + diffInputRight.scrollTop) - (diffInputRight.clientHeight / 2) + (boxB.height / 2);
 
-    const gutterB = diffLinesRight.children[delta.lineB];
-    if (gutterB) gutterB.classList.add('jump-target');
+    if (guttersB[delta.lineB]) guttersB[delta.lineB].classList.add('jump-target');
   }
 
   if (delta.lineA !== null && delta.lineB !== null) {
-    const gutterB = diffLinesRight.children[delta.lineB];
-    if (gutterB) gutterB.classList.add('jump-target');
+    if (guttersB[delta.lineB]) guttersB[delta.lineB].classList.add('jump-target');
   }
 
   targetScrollY = Math.max(0, targetScrollY);
 
-  // Prevent scroll listeners from causing race conditions during animation
   isProgrammaticScrolling = true;
   clearTimeout(scrollLockTimeout);
 
   diffInputLeft.scrollTo({ top: targetScrollY, behavior: 'smooth' });
   diffInputRight.scrollTo({ top: targetScrollY, behavior: 'smooth' });
-  diffLinesLeft.scrollTo({ top: targetScrollY, behavior: 'smooth' });
-  diffLinesRight.scrollTo({ top: targetScrollY, behavior: 'smooth' });
-  diffBackdropLeft.scrollTo({ top: targetScrollY, behavior: 'smooth' });
-  diffBackdropRight.scrollTo({ top: targetScrollY, behavior: 'smooth' });
+  updatePositions('left', targetScrollY);
+  updatePositions('right', targetScrollY);
 
   scrollLockTimeout = setTimeout(() => {
     isProgrammaticScrolling = false;
@@ -549,11 +550,12 @@ document.getElementById('btn-diff-swap').addEventListener('click', () => {
 
 function showButtonFeedback(btn, isSuccess) {
   if (!btn) return;
-  const originalContent = btn.innerHTML;
-  btn.innerHTML = isSuccess 
+  const iconContainer = btn.querySelector('.btn-icon') || btn;
+  const originalSvg = iconContainer.innerHTML;
+  iconContainer.innerHTML = isSuccess 
     ? '<span style="font-size: 11px; font-weight: bold; color: #34d399;">✓</span>' 
     : '<span style="font-size: 11px; font-weight: bold; color: #f87171;">✕</span>';
-  setTimeout(() => { btn.innerHTML = originalContent; }, 1400);
+  setTimeout(() => { iconContainer.innerHTML = originalSvg; }, 1400);
 }
 
 const btnFormatLeft = document.getElementById('btn-diff-format-left');
@@ -606,21 +608,38 @@ btnFormatRight.addEventListener('click', () => {
   }
 });
 
-document.getElementById('btn-diff-clear-left').addEventListener('click', () => {
-  diffInputLeft.value = '';
-  handleLeftInput(true);
-});
+// Centralized Clear Both Panes
+if (btnClearAll) {
+  btnClearAll.addEventListener('click', () => {
+    diffInputLeft.value = '';
+    diffInputRight.value = '';
+    sessionStorage.removeItem('shared_json_left');
+    localStorage.removeItem('shared_json_left');
 
-document.getElementById('btn-diff-clear-right').addEventListener('click', () => {
-  diffInputRight.value = '';
-  executeLineByLineDiff();
-});
+    jsonSyncChannel.postMessage({
+      type: 'UPDATE_JSON',
+      payload: ''
+    });
+
+    diffInputLeft.scrollTop = 0;
+    diffInputRight.scrollTop = 0;
+    updatePositions('left', 0);
+    updatePositions('right', 0);
+
+    currentJumpIndex = -1;
+    jumpDeltas = [];
+    document.querySelectorAll('.jump-target').forEach(el => el.classList.remove('jump-target'));
+
+    executeLineByLineDiff();
+    showButtonFeedback(btnClearAll, true);
+  });
+}
 
 window.addEventListener('resize', () => {
   executeLineByLineDiff();
 });
 
-// Start with fresh, empty panes on page refresh
+// Initialization on clean load
 diffInputLeft.value = '';
 diffInputRight.value = '';
 executeLineByLineDiff();
