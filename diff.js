@@ -49,10 +49,19 @@ const filterBtnAdd = document.getElementById('filter-btn-add');
 const filterBtnDel = document.getElementById('filter-btn-del');
 const filterBtnMod = document.getElementById('filter-btn-mod');
 
+// Jump Navigation DOM Elements
+const btnJumpPrev = document.getElementById('btn-jump-prev');
+const btnJumpNext = document.getElementById('btn-jump-next');
+const diffJumpCounter = document.getElementById('diff-jump-counter');
+
 let syncScrollEnabled = true;
 let isSyncingLeft = false;
 let isSyncingRight = false;
 let activeDiffFilter = 'ALL';
+
+// Jump State
+let jumpDeltas = [];
+let currentJumpIndex = -1;
 
 navToViewer.addEventListener('click', () => {
   const content = diffInputLeft.value.trim();
@@ -191,7 +200,6 @@ function computeLineDiff(linesA, linesB) {
     }
   }
 
-  // Correlate corresponding keys: handles optional spacing before the colon and 1-to-1 match reservation
   const pairedModsA = new Map();
   const pairedModsB = new Map();
   const matchedRightIndices = new Set();
@@ -256,7 +264,6 @@ function executeLineByLineDiff() {
   const rawA = diffInputLeft.value;
   const rawB = diffInputRight.value;
 
-  // Prevent phantom line 1 in empty input fields
   const linesA = rawA.length > 0 ? rawA.split('\n') : [];
   const linesB = rawB.length > 0 ? rawB.split('\n') : [];
 
@@ -305,7 +312,7 @@ function executeLineByLineDiff() {
   }
   diffBackdropRight.innerHTML = backdropHtmlB;
 
-  // 3. Render Gutters strictly mapped to actual line count & measured heights
+  // 3. Render Gutters
   const renderedLinesA = diffBackdropLeft.children;
   let gutterHtmlA = '';
   for (let i = 0; i < linesA.length; i++) {
@@ -339,7 +346,129 @@ function executeLineByLineDiff() {
   filterBtnAdd.textContent = `+ ${countAdd} `;
   filterBtnDel.textContent = `- ${countDel} `;
   filterBtnMod.textContent = `~ ${countMod} `;
+
+  // 4. Update Jump Deltas
+  buildJumpDeltas(diffA, diffB, pairedModsA);
 }
+
+// Build consolidated list of diff targets based on active filter
+function buildJumpDeltas(diffA, diffB, pairedModsA) {
+  jumpDeltas = [];
+  const handledRightIndices = new Set();
+
+  // Left items and paired modifications
+  for (const [idxA, typeA] of diffA.entries()) {
+    let qualifies = false;
+    if (activeDiffFilter === 'ALL') qualifies = true;
+    else if (activeDiffFilter === 'DEL' && typeA === 'DEL') qualifies = true;
+    else if (activeDiffFilter === 'MOD' && typeA === 'MOD') qualifies = true;
+
+    if (qualifies) {
+      const idxB = pairedModsA.get(idxA) ?? null;
+      if (idxB !== null) handledRightIndices.add(idxB);
+      jumpDeltas.push({ side: 'left', lineA: idxA, lineB: idxB });
+    }
+  }
+
+  // Pure additions on the right
+  for (const [idxB, typeB] of diffB.entries()) {
+    if (handledRightIndices.has(idxB)) continue;
+    let qualifies = false;
+    if (activeDiffFilter === 'ALL') qualifies = true;
+    else if (activeDiffFilter === 'ADD' && typeB === 'ADD') qualifies = true;
+    else if (activeDiffFilter === 'MOD' && typeB === 'MOD') qualifies = true;
+
+    if (qualifies) {
+      jumpDeltas.push({ side: 'right', lineA: null, lineB: idxB });
+    }
+  }
+
+  // Sort top-to-bottom according to line index
+  jumpDeltas.sort((a, b) => {
+    const posA = a.lineA !== null ? a.lineA : a.lineB;
+    const posB = b.lineA !== null ? b.lineA : b.lineB;
+    return posA - posB;
+  });
+
+  if (jumpDeltas.length === 0) {
+    currentJumpIndex = -1;
+    diffJumpCounter.textContent = '0 / 0';
+    btnJumpPrev.disabled = true;
+    btnJumpNext.disabled = true;
+  } else {
+    if (currentJumpIndex >= jumpDeltas.length) {
+      currentJumpIndex = jumpDeltas.length - 1;
+    } else if (currentJumpIndex === -1) {
+      currentJumpIndex = 0;
+    }
+    diffJumpCounter.textContent = `${currentJumpIndex + 1} / ${jumpDeltas.length}`;
+    btnJumpPrev.disabled = false;
+    btnJumpNext.disabled = false;
+  }
+}
+
+function jumpToDelta(index) {
+  if (index < 0 || index >= jumpDeltas.length) return;
+  currentJumpIndex = index;
+  diffJumpCounter.textContent = `${currentJumpIndex + 1} / ${jumpDeltas.length}`;
+
+  const delta = jumpDeltas[index];
+
+  // Remove prior visual pulse
+  document.querySelectorAll('.jump-target').forEach(el => el.classList.remove('jump-target'));
+
+  let targetScrollY = 0;
+
+  if (delta.lineA !== null && diffBackdropLeft.children[delta.lineA]) {
+    const targetNodeA = diffBackdropLeft.children[delta.lineA];
+    targetScrollY = targetNodeA.offsetTop - (diffInputLeft.clientHeight / 2) + (targetNodeA.offsetHeight / 2);
+
+    const gutterA = diffLinesLeft.children[delta.lineA];
+    if (gutterA) gutterA.classList.add('jump-target');
+  }
+
+  if (delta.lineB !== null && diffBackdropRight.children[delta.lineB]) {
+    const targetNodeB = diffBackdropRight.children[delta.lineB];
+    if (delta.lineA === null) {
+      targetScrollY = targetNodeB.offsetTop - (diffInputRight.clientHeight / 2) + (targetNodeB.offsetHeight / 2);
+    }
+    const gutterB = diffLinesRight.children[delta.lineB];
+    if (gutterB) gutterB.classList.add('jump-target');
+  }
+
+  targetScrollY = Math.max(0, targetScrollY);
+
+  diffInputLeft.scrollTo({ top: targetScrollY, behavior: 'smooth' });
+  diffInputRight.scrollTo({ top: targetScrollY, behavior: 'smooth' });
+  diffLinesLeft.scrollTo({ top: targetScrollY, behavior: 'smooth' });
+  diffLinesRight.scrollTo({ top: targetScrollY, behavior: 'smooth' });
+  diffBackdropLeft.scrollTo({ top: targetScrollY, behavior: 'smooth' });
+  diffBackdropRight.scrollTo({ top: targetScrollY, behavior: 'smooth' });
+}
+
+btnJumpPrev.addEventListener('click', () => {
+  if (jumpDeltas.length === 0) return;
+  const prevIdx = currentJumpIndex > 0 ? currentJumpIndex - 1 : jumpDeltas.length - 1;
+  jumpToDelta(prevIdx);
+});
+
+btnJumpNext.addEventListener('click', () => {
+  if (jumpDeltas.length === 0) return;
+  const nextIdx = currentJumpIndex < jumpDeltas.length - 1 ? currentJumpIndex + 1 : 0;
+  jumpToDelta(nextIdx);
+});
+
+// Keyboard navigation shortcuts: F7 for Next, Shift + F7 for Prev
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'F7') {
+    e.preventDefault();
+    if (e.shiftKey) {
+      btnJumpPrev.click();
+    } else {
+      btnJumpNext.click();
+    }
+  }
+});
 
 function setDiffFilter(filterType) {
   activeDiffFilter = filterType;

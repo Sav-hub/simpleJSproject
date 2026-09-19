@@ -25,6 +25,9 @@
         </div>
       </div>
 
+      <!-- Diff Jump Navigation -->
+      
+
       <a href="index.html" class="tab-link" id="nav-to-viewer">🛠 Viewer & Tree</a>
       <a href="diff.html" class="tab-link active">⚖️ In-Line Diff Compare</a>
       
@@ -67,6 +70,15 @@
         <div class="header">
           <div style="display:flex; align-items:center; gap:8px;">
             <span>Modified JSON</span>
+            <div class="diff-nav-group" title="Navigate between diffs">
+        <button id="btn-jump-prev" class="icon-btn" title="Previous difference (Shift + F7)" disabled>
+          <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+        </button>
+        <span id="diff-jump-counter" class="diff-jump-counter">0 / 0</span>
+        <button id="btn-jump-next" class="icon-btn" title="Next difference (F7)" disabled>
+          <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
             <div class="diff-filters">
               <button class="filter-btn filter-all active" id="filter-btn-all">All</button>
               <button class="filter-btn filter-add" id="filter-btn-add">+ 0</button>
