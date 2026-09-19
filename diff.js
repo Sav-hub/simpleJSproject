@@ -620,13 +620,8 @@ window.addEventListener('resize', () => {
   executeLineByLineDiff();
 });
 
-const sharedLeft = localStorage.getItem('shared_json_left');
-if (sharedLeft) {
-  const trimmed = sharedLeft.trim();
-  diffInputLeft.value = (trimmed.startsWith('{') || trimmed.startsWith('[')) ? sharedLeft : '';
-} else {
-  diffInputLeft.value = '';
-}
+// Start with fresh, empty panes on page refresh
+diffInputLeft.value = '';
 diffInputRight.value = '';
 executeLineByLineDiff();
 
