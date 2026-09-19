@@ -77,29 +77,64 @@ btnSyncScroll.addEventListener('click', () => {
 });
 
 // Resilient Bidirectional Sync
+let activeScrollSource = null;
+let scrollReleaseTimer = null;
+
+function claimScrollDriver(source) {
+  activeScrollSource = source;
+  clearTimeout(scrollReleaseTimer);
+  // Release driver after scroll inertia settles (120ms of inactivity)
+  scrollReleaseTimer = setTimeout(() => {
+    activeScrollSource = null;
+  }, 120);
+}
+
+// Track mouse enter, clicks, and physical wheel/trackpad engagement
+diffInputLeft.addEventListener('wheel', () => claimScrollDriver('left'), { passive: true });
+diffInputLeft.addEventListener('mouseenter', () => claimScrollDriver('left'), { passive: true });
+diffInputLeft.addEventListener('pointerdown', () => claimScrollDriver('left'), { passive: true });
+
+diffInputRight.addEventListener('wheel', () => claimScrollDriver('right'), { passive: true });
+diffInputRight.addEventListener('mouseenter', () => claimScrollDriver('right'), { passive: true });
+diffInputRight.addEventListener('pointerdown', () => claimScrollDriver('right'), { passive: true });
+
+// Left Pane Scroll Sync
 diffInputLeft.addEventListener('scroll', () => {
-  diffLinesLeft.scrollTop = diffInputLeft.scrollTop;
-  diffBackdropLeft.scrollTop = diffInputLeft.scrollTop;
+  const top = diffInputLeft.scrollTop;
 
-  if (isProgrammaticScrolling || !syncScrollEnabled || isSyncingLeft) return;
-  isSyncingRight = true;
-  diffInputRight.scrollTop = diffInputLeft.scrollTop;
-  diffLinesRight.scrollTop = diffInputLeft.scrollTop;
-  diffBackdropRight.scrollTop = diffInputLeft.scrollTop;
-  requestAnimationFrame(() => { isSyncingRight = false; });
-});
+  // 1. Immediately bind local gutter and backdrop synchronously (0ms delay)
+  diffLinesLeft.scrollTop = top;
+  diffBackdropLeft.scrollTop = top;
 
+  if (isProgrammaticScrolling) return;
+
+  // 2. Drive opposite pane if left is driver or unassigned
+  if (syncScrollEnabled && (activeScrollSource === 'left' || !activeScrollSource)) {
+    claimScrollDriver('left');
+    diffInputRight.scrollTop = top;
+    diffLinesRight.scrollTop = top;
+    diffBackdropRight.scrollTop = top;
+  }
+}, { passive: true });
+
+// Right Pane Scroll Sync
 diffInputRight.addEventListener('scroll', () => {
-  diffLinesRight.scrollTop = diffInputRight.scrollTop;
-  diffBackdropRight.scrollTop = diffInputRight.scrollTop;
+  const top = diffInputRight.scrollTop;
 
-  if (isProgrammaticScrolling || !syncScrollEnabled || isSyncingRight) return;
-  isSyncingLeft = true;
-  diffInputLeft.scrollTop = diffInputRight.scrollTop;
-  diffLinesLeft.scrollTop = diffInputRight.scrollTop;
-  diffBackdropLeft.scrollTop = diffInputRight.scrollTop;
-  requestAnimationFrame(() => { isSyncingLeft = false; });
-});
+  // 1. Immediately bind local gutter and backdrop synchronously (0ms delay)
+  diffLinesRight.scrollTop = top;
+  diffBackdropRight.scrollTop = top;
+
+  if (isProgrammaticScrolling) return;
+
+  // 2. Drive opposite pane if right is driver or unassigned
+  if (syncScrollEnabled && (activeScrollSource === 'right' || !activeScrollSource)) {
+    claimScrollDriver('right');
+    diffInputLeft.scrollTop = top;
+    diffLinesLeft.scrollTop = top;
+    diffBackdropLeft.scrollTop = top;
+  }
+}, { passive: true });
 
 function handleLeftInput(broadcast = true) {
   localStorage.setItem('shared_json_left', diffInputLeft.value);
