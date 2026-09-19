@@ -49,7 +49,6 @@ const filterBtnAdd = document.getElementById('filter-btn-add');
 const filterBtnDel = document.getElementById('filter-btn-del');
 const filterBtnMod = document.getElementById('filter-btn-mod');
 
-// Jump Navigation DOM Elements
 const btnJumpPrev = document.getElementById('btn-jump-prev');
 const btnJumpNext = document.getElementById('btn-jump-next');
 const diffJumpCounter = document.getElementById('diff-jump-counter');
@@ -57,9 +56,10 @@ const diffJumpCounter = document.getElementById('diff-jump-counter');
 let syncScrollEnabled = true;
 let isSyncingLeft = false;
 let isSyncingRight = false;
+let isProgrammaticScrolling = false;
+let scrollLockTimeout = null;
 let activeDiffFilter = 'ALL';
 
-// Jump State
 let jumpDeltas = [];
 let currentJumpIndex = -1;
 
@@ -76,12 +76,12 @@ btnSyncScroll.addEventListener('click', () => {
   syncScrollLabel.textContent = syncScrollEnabled ? 'Sync Scroll: ON' : 'Sync Scroll: OFF';
 });
 
-// Vertical Scroll Sync
+// Resilient Bidirectional Sync
 diffInputLeft.addEventListener('scroll', () => {
   diffLinesLeft.scrollTop = diffInputLeft.scrollTop;
   diffBackdropLeft.scrollTop = diffInputLeft.scrollTop;
 
-  if (!syncScrollEnabled || isSyncingLeft) return;
+  if (isProgrammaticScrolling || !syncScrollEnabled || isSyncingLeft) return;
   isSyncingRight = true;
   diffInputRight.scrollTop = diffInputLeft.scrollTop;
   diffLinesRight.scrollTop = diffInputLeft.scrollTop;
@@ -93,7 +93,7 @@ diffInputRight.addEventListener('scroll', () => {
   diffLinesRight.scrollTop = diffInputRight.scrollTop;
   diffBackdropRight.scrollTop = diffInputRight.scrollTop;
 
-  if (!syncScrollEnabled || isSyncingRight) return;
+  if (isProgrammaticScrolling || !syncScrollEnabled || isSyncingRight) return;
   isSyncingLeft = true;
   diffInputLeft.scrollTop = diffInputRight.scrollTop;
   diffLinesLeft.scrollTop = diffInputRight.scrollTop;
@@ -200,6 +200,7 @@ function computeLineDiff(linesA, linesB) {
     }
   }
 
+  // Correlate corresponding keys: choose closest matching index to keep sequence aligned
   const pairedModsA = new Map();
   const pairedModsB = new Map();
   const matchedRightIndices = new Set();
@@ -209,19 +210,29 @@ function computeLineDiff(linesA, linesB) {
     const matchA = lineA.match(/"([^"]+)"\s*:/);
     if (matchA) {
       const keyA = matchA[1];
-      for (const [idxB, typeB] of diffB.entries()) {
+      let bestBIdx = -1;
+      let minDistance = Infinity;
+
+      for (const [idxB] of diffB.entries()) {
         if (!matchedRightIndices.has(idxB)) {
           const lineB = linesB[idxB].trim();
           const matchB = lineB.match(/"([^"]+)"\s*:/);
           if (matchB && matchB[1] === keyA) {
-            diffA.set(idxA, 'MOD');
-            diffB.set(idxB, 'MOD');
-            pairedModsA.set(idxA, idxB);
-            pairedModsB.set(idxB, idxA);
-            matchedRightIndices.add(idxB);
-            break;
+            const distance = Math.abs(idxA - idxB);
+            if (distance < minDistance) {
+              minDistance = distance;
+              bestBIdx = idxB;
+            }
           }
         }
+      }
+
+      if (bestBIdx !== -1) {
+        diffA.set(idxA, 'MOD');
+        diffB.set(bestBIdx, 'MOD');
+        pairedModsA.set(idxA, bestBIdx);
+        pairedModsB.set(bestBIdx, idxA);
+        matchedRightIndices.add(bestBIdx);
       }
     }
   });
@@ -271,7 +282,7 @@ function executeLineByLineDiff() {
 
   let countAdd = 0, countDel = 0, countMod = 0;
 
-  // 1. Render left backdrop lines
+  // 1. Render Left Backdrops
   let backdropHtmlA = '';
   for (let i = 0; i < linesA.length; i++) {
     const type = diffA.get(i);
@@ -292,7 +303,7 @@ function executeLineByLineDiff() {
   }
   diffBackdropLeft.innerHTML = backdropHtmlA;
 
-  // 2. Render right backdrop lines
+  // 2. Render Right Backdrops
   let backdropHtmlB = '';
   for (let j = 0; j < linesB.length; j++) {
     const type = diffB.get(j);
@@ -312,51 +323,51 @@ function executeLineByLineDiff() {
   }
   diffBackdropRight.innerHTML = backdropHtmlB;
 
-  // 3. Render Gutters
-  const renderedLinesA = diffBackdropLeft.children;
-  let gutterHtmlA = '';
-  for (let i = 0; i < linesA.length; i++) {
-    const type = diffA.get(i);
-    let gutterClass = '';
-    if (type === 'DEL' && (activeDiffFilter === 'ALL' || activeDiffFilter === 'DEL')) {
-      gutterClass = 'gutter-del';
-    } else if (type === 'MOD' && (activeDiffFilter === 'ALL' || activeDiffFilter === 'MOD')) {
-      gutterClass = 'gutter-mod';
+  // 3. Render Gutters strictly mapped to actual line count & measured heights
+  requestAnimationFrame(() => {
+    const renderedLinesA = diffBackdropLeft.children;
+    let gutterHtmlA = '';
+    for (let i = 0; i < linesA.length; i++) {
+      const type = diffA.get(i);
+      let gutterClass = '';
+      if (type === 'DEL' && (activeDiffFilter === 'ALL' || activeDiffFilter === 'DEL')) {
+        gutterClass = 'gutter-del';
+      } else if (type === 'MOD' && (activeDiffFilter === 'ALL' || activeDiffFilter === 'MOD')) {
+        gutterClass = 'gutter-mod';
+      }
+      const h = renderedLinesA[i] ? renderedLinesA[i].getBoundingClientRect().height : 20;
+      gutterHtmlA += `<div class="${gutterClass}" style="height:${h}px">${i + 1}</div>`;
     }
-    const h = renderedLinesA[i] ? renderedLinesA[i].getBoundingClientRect().height : 20;
-    gutterHtmlA += `<div class="${gutterClass}" style="height:${h}px">${i + 1}</div>`;
-  }
-  diffLinesLeft.innerHTML = gutterHtmlA;
+    diffLinesLeft.innerHTML = gutterHtmlA;
 
-  const renderedLinesB = diffBackdropRight.children;
-  let gutterHtmlB = '';
-  for (let j = 0; j < linesB.length; j++) {
-    const type = diffB.get(j);
-    let gutterClass = '';
-    if (type === 'ADD' && (activeDiffFilter === 'ALL' || activeDiffFilter === 'ADD')) {
-      gutterClass = 'gutter-add';
-    } else if (type === 'MOD' && (activeDiffFilter === 'ALL' || activeDiffFilter === 'MOD')) {
-      gutterClass = 'gutter-mod';
+    const renderedLinesB = diffBackdropRight.children;
+    let gutterHtmlB = '';
+    for (let j = 0; j < linesB.length; j++) {
+      const type = diffB.get(j);
+      let gutterClass = '';
+      if (type === 'ADD' && (activeDiffFilter === 'ALL' || activeDiffFilter === 'ADD')) {
+        gutterClass = 'gutter-add';
+      } else if (type === 'MOD' && (activeDiffFilter === 'ALL' || activeDiffFilter === 'MOD')) {
+        gutterClass = 'gutter-mod';
+      }
+      const h = renderedLinesB[j] ? renderedLinesB[j].getBoundingClientRect().height : 20;
+      gutterHtmlB += `<div class="${gutterClass}" style="height:${h}px">${j + 1}</div>`;
     }
-    const h = renderedLinesB[j] ? renderedLinesB[j].getBoundingClientRect().height : 20;
-    gutterHtmlB += `<div class="${gutterClass}" style="height:${h}px">${j + 1}</div>`;
-  }
-  diffLinesRight.innerHTML = gutterHtmlB;
+    diffLinesRight.innerHTML = gutterHtmlB;
+  });
 
   filterBtnAdd.textContent = `+ ${countAdd} `;
   filterBtnDel.textContent = `- ${countDel} `;
   filterBtnMod.textContent = `~ ${countMod} `;
 
-  // 4. Update Jump Deltas
+  // 4. Update Navigation Deltas
   buildJumpDeltas(diffA, diffB, pairedModsA);
 }
 
-// Build consolidated list of diff targets based on active filter
 function buildJumpDeltas(diffA, diffB, pairedModsA) {
   jumpDeltas = [];
   const handledRightIndices = new Set();
 
-  // Left items and paired modifications
   for (const [idxA, typeA] of diffA.entries()) {
     let qualifies = false;
     if (activeDiffFilter === 'ALL') qualifies = true;
@@ -366,11 +377,10 @@ function buildJumpDeltas(diffA, diffB, pairedModsA) {
     if (qualifies) {
       const idxB = pairedModsA.get(idxA) ?? null;
       if (idxB !== null) handledRightIndices.add(idxB);
-      jumpDeltas.push({ side: 'left', lineA: idxA, lineB: idxB });
+      jumpDeltas.push({ lineA: idxA, lineB: idxB });
     }
   }
 
-  // Pure additions on the right
   for (const [idxB, typeB] of diffB.entries()) {
     if (handledRightIndices.has(idxB)) continue;
     let qualifies = false;
@@ -379,11 +389,10 @@ function buildJumpDeltas(diffA, diffB, pairedModsA) {
     else if (activeDiffFilter === 'MOD' && typeB === 'MOD') qualifies = true;
 
     if (qualifies) {
-      jumpDeltas.push({ side: 'right', lineA: null, lineB: idxB });
+      jumpDeltas.push({ lineA: null, lineB: idxB });
     }
   }
 
-  // Sort top-to-bottom according to line index
   jumpDeltas.sort((a, b) => {
     const posA = a.lineA !== null ? a.lineA : a.lineB;
     const posB = b.lineA !== null ? b.lineA : b.lineB;
@@ -414,29 +423,38 @@ function jumpToDelta(index) {
 
   const delta = jumpDeltas[index];
 
-  // Remove prior visual pulse
   document.querySelectorAll('.jump-target').forEach(el => el.classList.remove('jump-target'));
 
   let targetScrollY = 0;
 
   if (delta.lineA !== null && diffBackdropLeft.children[delta.lineA]) {
-    const targetNodeA = diffBackdropLeft.children[delta.lineA];
-    targetScrollY = targetNodeA.offsetTop - (diffInputLeft.clientHeight / 2) + (targetNodeA.offsetHeight / 2);
+    const nodeA = diffBackdropLeft.children[delta.lineA];
+    const boxA = nodeA.getBoundingClientRect();
+    const containerBoxA = diffInputLeft.getBoundingClientRect();
+    targetScrollY = (boxA.top - containerBoxA.top + diffInputLeft.scrollTop) - (diffInputLeft.clientHeight / 2) + (boxA.height / 2);
 
     const gutterA = diffLinesLeft.children[delta.lineA];
     if (gutterA) gutterA.classList.add('jump-target');
+  } else if (delta.lineB !== null && diffBackdropRight.children[delta.lineB]) {
+    const nodeB = diffBackdropRight.children[delta.lineB];
+    const boxB = nodeB.getBoundingClientRect();
+    const containerBoxB = diffInputRight.getBoundingClientRect();
+    targetScrollY = (boxB.top - containerBoxB.top + diffInputRight.scrollTop) - (diffInputRight.clientHeight / 2) + (boxB.height / 2);
+
+    const gutterB = diffLinesRight.children[delta.lineB];
+    if (gutterB) gutterB.classList.add('jump-target');
   }
 
-  if (delta.lineB !== null && diffBackdropRight.children[delta.lineB]) {
-    const targetNodeB = diffBackdropRight.children[delta.lineB];
-    if (delta.lineA === null) {
-      targetScrollY = targetNodeB.offsetTop - (diffInputRight.clientHeight / 2) + (targetNodeB.offsetHeight / 2);
-    }
+  if (delta.lineA !== null && delta.lineB !== null) {
     const gutterB = diffLinesRight.children[delta.lineB];
     if (gutterB) gutterB.classList.add('jump-target');
   }
 
   targetScrollY = Math.max(0, targetScrollY);
+
+  // Prevent scroll listeners from causing race conditions during animation
+  isProgrammaticScrolling = true;
+  clearTimeout(scrollLockTimeout);
 
   diffInputLeft.scrollTo({ top: targetScrollY, behavior: 'smooth' });
   diffInputRight.scrollTo({ top: targetScrollY, behavior: 'smooth' });
@@ -444,6 +462,10 @@ function jumpToDelta(index) {
   diffLinesRight.scrollTo({ top: targetScrollY, behavior: 'smooth' });
   diffBackdropLeft.scrollTo({ top: targetScrollY, behavior: 'smooth' });
   diffBackdropRight.scrollTo({ top: targetScrollY, behavior: 'smooth' });
+
+  scrollLockTimeout = setTimeout(() => {
+    isProgrammaticScrolling = false;
+  }, 400);
 }
 
 btnJumpPrev.addEventListener('click', () => {
@@ -458,7 +480,6 @@ btnJumpNext.addEventListener('click', () => {
   jumpToDelta(nextIdx);
 });
 
-// Keyboard navigation shortcuts: F7 for Next, Shift + F7 for Prev
 window.addEventListener('keydown', (e) => {
   if (e.key === 'F7') {
     e.preventDefault();
