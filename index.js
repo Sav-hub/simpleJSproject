@@ -18,7 +18,6 @@ const gutter = document.getElementById('gutter');
 const gutterContent = document.getElementById('gutter-content');
 const viewport = document.getElementById('viewport');
 const themeToggleBtn = document.getElementById('theme-toggle-btn');
-// const activeFilenameEl = document.getElementById('active-filename');
 const fileInput = document.getElementById('file-input');
 const dropOverlay = document.getElementById('drop-overlay');
 
@@ -118,7 +117,11 @@ function normalizeNewlines(str) {
   return str.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
 
-function setEditorValue(newVal) {
+// FIX 1: Support filename propagation to preserve activeFilename
+function setEditorValue(newVal, filename = null) {
+  if (filename && typeof filename === 'string') {
+    activeFilename = filename;
+  }
   const cleanVal = normalizeNewlines(newVal).replace(/\u00A0/g, ' ');
   textarea.focus();
   textarea.setSelectionRange(0, textarea.value.length);
@@ -633,6 +636,7 @@ function analyzeJSONDiagnostics(source) {
   }
 }
 
+// FIX 3: Robust active bracket calculation
 function findActiveBracketPair(text, cursorPos) {
   if (document.activeElement !== textarea) return null;
   if (cursorPos < 0 || cursorPos > text.length || text.length === 0) return null;
@@ -712,7 +716,6 @@ function parseEditorLines(rawText) {
     const line = lines[i];
     let inStr = false;
 
-    // Scan for folding scopes
     for (let c = 0; c < line.length; c++) {
       const char = line[c];
       if (char === '\\' && inStr) {
@@ -739,7 +742,6 @@ function parseEditorLines(rawText) {
       }
     }
 
-    // High-volume line guard: bypass regex tokenizer on enormous single lines
     if (line.length > 4000) {
       lineStructures.push({ raw: line, html: escapeHtml(line) || '&nbsp;' });
       charAccumulator += line.length + 1;
@@ -789,7 +791,6 @@ function parseEditorLines(rawText) {
   return { lineStructures, foldRanges };
 }
 
-// Stack-safe, iterative key counter (no recursion limits)
 function countKeysIterative(root) {
   if (!root || typeof root !== 'object') return 0;
   let count = 0;
@@ -856,7 +857,6 @@ function validate() {
     }
   }
 
-  // If the error state changed, update the gutter error markers immediately
   if (previousErrorLine !== errorLine) {
     const gutterRows = gutterContent.querySelectorAll('.gutter-row');
     gutterRows.forEach(row => {
@@ -868,7 +868,6 @@ function validate() {
 
 function scheduleValidation() {
   clearTimeout(validationDebounceTimer);
-  // Instant validation when document is empty to immediately clear red markers
   if (!textarea.value.trim()) {
     validate();
     return;
@@ -1026,20 +1025,17 @@ function updateCustomCaret() {
   caretEl.style.display = 'block';
 }
 
-// Synchronize gutter row heights with code-line heights for accurate visual alignment[cite: 1]
 function syncGutterHeights() {
   const codeLines = editorLayer.querySelectorAll('.code-line');
   const gutterRows = gutterContent.querySelectorAll('.gutter-row');
   const actualHeight = Math.max(editorLayer.scrollHeight, viewport.clientHeight);
 
-  // Exact 1:1 match to guarantee gutter row height matches wrapped code lines[cite: 1]
   const len = Math.min(codeLines.length, gutterRows.length);
   const heights = new Float32Array(len);
   for (let i = 0; i < len; i++) {
     heights[i] = codeLines[i].getBoundingClientRect().height;
   }
   for (let i = 0; i < len; i++) {
-    // Only mutate if different to prevent unnecessary layout invalidation
     const h = `${heights[i]}px`;
     if (gutterRows[i].style.height !== h) {
       gutterRows[i].style.height = h;
@@ -1108,14 +1104,12 @@ function render() {
   editorLayer.style.width = '100%';
   editorLayer.style.maxWidth = '100%';
 
-  // Sync row heights on next paint without blocking typing
   cancelAnimationFrame(renderFrame);
   renderFrame = requestAnimationFrame(syncGutterHeights);
 
   gutter.style.paddingBottom = '0px';
   viewport.scrollLeft = 0;
   textarea.scrollLeft = 0;
-
   gutter.scrollTop = viewport.scrollTop;
 
   updateTelemetry();
@@ -1127,7 +1121,6 @@ function render() {
 
 const resizeObserver = new ResizeObserver(() => {
   if (!isRendering) {
-    // When window resizes, line wrap points change; immediately resync heights[cite: 1]
     syncGutterHeights();
   }
 });
@@ -1409,7 +1402,6 @@ function handleSmartCaretNavigation(key) {
   }
 }
 
-// Stack-safe, iterative key sorting (zero call stack recursion)
 function sortKeysIterative(data, direction = 'asc') {
   if (data === null || typeof data !== 'object') return data;
   const isArr = Array.isArray(data);
@@ -1475,7 +1467,6 @@ function toSnakeCaseKey(str) {
   return prefix + snake;
 }
 
-// Stack-safe, iterative key case transforming (zero call stack recursion)
 function transformKeysIterative(data, transformFn) {
   if (data === null || typeof data !== 'object') return data;
   const isArr = Array.isArray(data);
@@ -1664,50 +1655,70 @@ mainView.addEventListener('drop', (e) => {
   }
 });
 
+// FIX 2: Delimiter-safe JSON formatter
 function formatMalformedJson(raw) {
   let indentLevel = 0;
   const tab = '  ';
   let formatted = '';
-  let inString = false;
+  let i = 0;
+  const len = raw.length;
 
-  for (let i = 0; i < raw.length; i++) {
+  while (i < len) {
     const char = raw[i];
 
-    if (char === '"') {
-      let slashes = 0;
-      for (let b = i - 1; b >= 0 && raw[b] === '\\'; b--) slashes++;
-      if (slashes % 2 === 0) {
-        inString = !inString;
+    // Preserve quoted strings including escaped inner characters
+    if (char === '"' || char === "'") {
+      const quoteChar = char;
+      formatted += quoteChar;
+      i++;
+      while (i < len) {
+        const c = raw[i];
+        if (c === '\\') {
+          formatted += c;
+          i++;
+          if (i < len) {
+            formatted += raw[i];
+            i++;
+          }
+          continue;
+        }
+        formatted += c;
+        if (c === quoteChar) {
+          i++;
+          break;
+        }
+        i++;
       }
-      formatted += char;
-      continue;
-    }
-
-    if (inString) {
-      formatted += char;
       continue;
     }
 
     if (char === '{' || char === '[') {
       indentLevel++;
       formatted += char + '\n' + tab.repeat(indentLevel);
+      i++;
     } else if (char === '}' || char === ']') {
       indentLevel = Math.max(0, indentLevel - 1);
       formatted = formatted.trimEnd() + '\n' + tab.repeat(indentLevel) + char;
+      i++;
     } else if (char === ',') {
       formatted += char + '\n' + tab.repeat(indentLevel);
+      i++;
     } else if (char === ':') {
       formatted += ': ';
+      i++;
     } else if (char === '\n' || char === '\r') {
       if (!formatted.endsWith('\n' + tab.repeat(indentLevel))) {
         formatted += '\n' + tab.repeat(indentLevel);
       }
+      i++;
     } else if (char === ' ' || char === '\t') {
       if (formatted.length > 0 && !/\s$/.test(formatted)) {
         formatted += ' ';
       }
+      i++;
     } else {
       formatted += char;
+      i++;
     }
   }
 
@@ -2266,6 +2277,7 @@ textarea.addEventListener('keydown', (e) => {
     return;
   }
 
+  // FIX 4: Preserves line prefixes and selection boundaries during Tab / Shift-Tab
   if (e.key === 'Tab') {
     e.preventDefault();
     if (start === end && !e.shiftKey) {
@@ -2273,7 +2285,10 @@ textarea.addEventListener('keydown', (e) => {
     } else {
       const before = val.substring(0, start);
       const lineStart = before.lastIndexOf('\n') + 1;
-      const fullSelection = val.substring(lineStart, end);
+      let lineEnd = val.indexOf('\n', end);
+      if (lineEnd === -1) lineEnd = val.length;
+
+      const fullSelection = val.substring(lineStart, lineEnd);
       const lines = fullSelection.split('\n');
 
       let modified;
@@ -2283,8 +2298,8 @@ textarea.addEventListener('keydown', (e) => {
         modified = lines.map(l => '  ' + l).join('\n');
       }
 
-      textarea.setSelectionRange(lineStart, end);
-      textarea.setRangeText(modified, lineStart, end, 'select');
+      textarea.setSelectionRange(lineStart, lineEnd);
+      textarea.setRangeText(modified, lineStart, lineEnd, 'select');
     }
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
     return;
