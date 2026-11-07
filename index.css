@@ -26,6 +26,15 @@
     --line-height: 22px;
     --font-size: 13px;
     --font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --error-badge-bg:rgba(239, 68, 68, 0.18);
+    --error-badge-text:#fca5a5;
+    --error-badge-border:#fca5a5;
+    --error-dot: #dc2626;
+    --valid-badge-bg: #dcfce7;
+    --valid-badge-border: #86efac;
+    --valid-badge-text: #15803d;
+    --valid-dot: #16a34a;
+
   }
 
   body.light-theme {
