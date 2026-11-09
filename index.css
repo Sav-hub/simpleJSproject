@@ -43,7 +43,7 @@
     --editor-bg: #e2e7ef;
     --panel-bg: #f1f5f9;
     --panel-header: #aaaeb6;
-    --border: #cbd5e1;
+    --border: black;
     --text: #0f172a;
     --text-muted: black;
     --accent: #4f46e5;
@@ -566,7 +566,7 @@
       align-items: center;
       justify-content: space-between;
       height: 28px;
-      padding: 0 12px;
+      padding: 0 0px;
       background: var(--status-bg);
       border-top: 1px solid var(--border);
       font-family: var(--font-family);

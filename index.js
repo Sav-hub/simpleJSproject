@@ -885,7 +885,7 @@ function updateTelemetry() {
   const linesBefore = val.substring(0, start).split('\n');
   const curLine = linesBefore.length;
   const curCol = linesBefore[linesBefore.length - 1].length + 1;
-  telCursor.innerHTML = `Ln <span>${curLine}</span>, Col <span>${curCol}</span>`;
+  telCursor.innerHTML = `R <span>${curLine}</span>, C <span>${curCol}</span>`;
 
   if (start !== end) {
     telSelection.style.display = 'inline-flex';
