@@ -45,7 +45,7 @@
     --panel-header: #aaaeb6;
     --border: #cbd5e1;
     --text: #0f172a;
-    --text-muted: #64748b;
+    --text-muted: black;
     --accent: #4f46e5;
     --accent-hover: #4338ca;
     --gutter-bg: #edeef2;
@@ -708,7 +708,7 @@
 }
 
 .lang-toggle-container a.inactive-lang {
-  color: var(--text-muted);
+  color: white;
 }
 
 .lang-label {

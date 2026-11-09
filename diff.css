@@ -169,7 +169,7 @@ body {
   color: #000;
 }
 .lang-toggle-container a.inactive-lang {
-  color: var(--text-muted);
+  color: white;
 }
 
 .diff-nav-group {
@@ -383,7 +383,7 @@ body {
 }
 
 .line-numbers div.gutter-mod {
-  color: #facc15 !important;
+  color: #624f03 !important;
   font-weight: 700;
 }
 .line-numbers div.gutter-mod::before {
