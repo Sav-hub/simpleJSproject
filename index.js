@@ -2306,7 +2306,39 @@ textarea.addEventListener('keydown', (e) => {
   }
 });
 
-if (document.getElementById('json-textarea')) {
+function hydrateEditor() {
+  if (!textarea) return;
+  // If the browser restored content into the textarea but editorLayer is blank, sync them
   validate();
   render();
 }
+
+// 1. Initial hydration on script evaluation
+if (document.getElementById('json-textarea')) {
+  hydrateEditor();
+}
+
+// 2. Handle browser form restoration on DOM load
+document.addEventListener('DOMContentLoaded', () => {
+  hydrateEditor();
+});
+
+// 3. Handle browser back/forward and cloned tab cache restoration
+window.addEventListener('pageshow', () => {
+  hydrateEditor();
+});
+
+// 4. Force render and layout sync when a background-duplicated tab is brought to the foreground
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    hydrateEditor();
+    syncGutterHeights();
+  }
+});
+
+// 5. Fallback timer to catch late browser-form restoration in background tabs
+setTimeout(() => {
+  if (textarea && textarea.value && editorLayer && !editorLayer.hasChildNodes()) {
+    hydrateEditor();
+  }
+}, 100);
