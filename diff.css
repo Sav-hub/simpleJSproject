@@ -1,4 +1,5 @@
 :root {
+  /* Currently Applied Grey Theme (Matches index.html) */
   --bg: #1e2430;
   --panel-bg: #282f3d;
   --panel-header: #323b4c;
@@ -9,43 +10,47 @@
   --accent-hover: #4f46e5;
   --editor-bg: #181d27;
   --gutter-bg: #141820;
-  --btn-bg: #1e2430;
-  --btn-hover: rgba(255, 255, 255, 0.08);
+  --status-bg: #0d1117;
+  --line-height: 22px;
+  --font-size: 13px;
+  --font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
-  --diff-add-bg: rgba(34, 197, 94, 0.18);
-  --diff-add-gutter: #22c55e;
+  /* Diff-specific highlights (Dark Grey Mode) */
+  --diff-add-bg: rgba(52, 211, 153, 0.15);
+  --diff-add-gutter: rgba(52, 211, 153, 0.25);
+  --diff-add-text: #6ee7b7;
   --diff-del-bg: rgba(239, 68, 68, 0.18);
-  --diff-del-gutter: #ef4444;
-  --diff-mod-bg: rgba(234, 179, 8, 0.18);
-  --diff-mod-gutter: #eab308;
-  --footer-bg: #0d1117;
-  --scrollbar-thumb: #3f4a5f;
-  --scrollbar-track: #141820;
+  --diff-del-gutter: rgba(239, 68, 68, 0.28);
+  --diff-del-text: #fca5a5;
+  --diff-mod-bg: rgba(250, 204, 21, 0.15);
+  --diff-mod-gutter: rgba(250, 204, 21, 0.25);
+  --diff-mod-text: #fde047;
 }
 
-body.dark-theme {
-  --bg: #0b0f19;
-  --panel-bg: #111827;
-  --panel-header: #151d30;
-  --border: #1f2937;
-  --text: #e5e7eb;
-  --text-muted: #6b7280;
-  --accent: #6366f1;
-  --accent-hover: #4f46e5;
-  --editor-bg: #0d1117;
-  --gutter-bg: #0d1321;
-  --btn-bg: #1f2937;
-  --btn-hover: #374151;
+body.light-theme {
+  /* Light Grey Theme (#e2e7ef matching index.html) */
+  --bg: #e2e7ef;
+  --panel-bg: #f1f5f9;
+  --panel-header: #aaaeb6;
+  --border: #cbd5e1;
+  --text: #0f172a;
+  --text-muted: black;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --editor-bg: #e2e7ef;
+  --gutter-bg: #d8dfea;
+  --status-bg: #dce2eb;
 
-  --diff-add-bg: rgba(34, 197, 94, 0.18);
-  --diff-add-gutter: #22c55e;
-  --diff-del-bg: rgba(239, 68, 68, 0.18);
-  --diff-del-gutter: #ef4444;
-  --diff-mod-bg: rgba(234, 179, 8, 0.18);
-  --diff-mod-gutter: #eab308;
-  --footer-bg: #080b11;
-  --scrollbar-thumb: #2d3748;
-  --scrollbar-track: #0d1117;
+  /* Diff-specific highlights (High-contrast Light Mode) */
+  --diff-add-bg: black;
+  --diff-add-gutter: rgba(22, 163, 74, 0.22);
+  --diff-add-text: #15803d;
+  --diff-del-bg: black;
+  --diff-del-gutter: rgba(220, 38, 38, 0.22);
+  --diff-del-text: #4c0707;
+  --diff-mod-bg: black;
+  --diff-mod-gutter: rgba(202, 138, 4, 0.25);
+  --diff-mod-text: #854d0e;
 }
 
 * { 
@@ -98,7 +103,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #fff;
+  color: var(--text);
 }
 .brand span { 
   color: var(--accent); 
@@ -126,11 +131,11 @@ body {
 }
 .tab-link:hover { 
   color: var(--text); 
-  background: var(--btn-hover); 
+  background: rgba(0, 0, 0, 0.05);
 }
 .tab-link.active {
   background: var(--panel-bg);
-  color: #fff;
+  color: var(--text);
   border-color: var(--border);
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
@@ -213,7 +218,7 @@ body {
 }
 .theme-toggle-btn:hover {
   border-color: var(--accent);
-  color: #fff;
+  color: var(--text);
 }
 
 .main-view {

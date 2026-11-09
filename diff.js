@@ -3,38 +3,12 @@ const CHANNEL_ID = 'json_diff_tab_' + Math.random().toString(36).substring(2, 9)
 const jsonSyncChannel = new BroadcastChannel('json_sync_channel');
 const themeSyncChannel = new BroadcastChannel('theme_sync_channel');
 
-const themeToggleBtn = document.getElementById('theme-toggle-btn');
-const themeIcon = document.getElementById('theme-icon');
-
-function applyTheme(themeName, broadcast = false) {
-  if (themeName === 'dark') {
-    document.body.classList.add('dark-theme');
-    if (themeIcon) themeIcon.textContent = '☀️';
-  } else {
-    document.body.classList.remove('dark-theme');
-    if (themeIcon) themeIcon.textContent = '🌙';
-  }
-  localStorage.setItem('json_studio_theme', themeName);
-
-  if (broadcast) {
-    themeSyncChannel.postMessage({ type: 'SET_THEME', theme: themeName });
-  }
-}
-
-if (themeToggleBtn) {
-  themeToggleBtn.addEventListener('click', () => {
-    const isDark = document.body.classList.contains('dark-theme');
-    applyTheme(isDark ? 'grey' : 'dark', true);
-  });
-}
-
 themeSyncChannel.onmessage = (e) => {
   if (e.data?.type === 'SET_THEME' && e.data.theme) {
     applyTheme(e.data.theme, false);
   }
 };
 
-applyTheme(localStorage.getItem('json_studio_theme') || 'grey', false);
 
 // DOM References
 const diffInputLeft = document.getElementById('diff-input-left');
